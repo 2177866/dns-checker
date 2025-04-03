@@ -1,0 +1,29 @@
+{
+    "name": "alyakin/dns-checker",
+    "description": "This is a wrapper for pear/net_dns2 for fast managed DNS checking",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Alexander Lyakin",
+            "email": "2177866@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "pear/net_dns2": "^1.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Alyakin\\DnsChecker\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Alyakin\\DnsChecker\\DnsCheckerServiceProvider"
+            ],
+            "aliases": []
+        }
+    }
+}
