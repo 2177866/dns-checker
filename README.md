@@ -50,5 +50,5 @@ $cname = $dns->getRecords('sub.example.com', 'CNAME');
 ```
 
 ## Лицензия
-
-MIT
+Этот пакет использует [Net_DNS2](https://github.com/mikepultz/netdns2), лицензированный на условиях лицензии BSD 2-Clause.
+Данный пакет распространяется по лицензии MIT
