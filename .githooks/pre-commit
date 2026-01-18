@@ -11,12 +11,15 @@ if [ ! -f vendor/autoload.php ]; then
   exit 1
 fi
 
-PHP_FILES_Z="$(git diff --cached --name-only -z --diff-filter=ACMR -- '*.php' || true)"
+PHP_FILES="$(git diff --cached --name-only --diff-filter=ACMR -- '*.php' || true)"
 
-if [ -n "$PHP_FILES_Z" ]; then
+if [ -n "$PHP_FILES" ]; then
   echo "Running Pint on staged PHP files..."
-  printf "%s" "$PHP_FILES_Z" | xargs -0 php ./vendor/bin/pint --
-  printf "%s" "$PHP_FILES_Z" | xargs -0 git add --
+  echo "$PHP_FILES" | while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    php ./vendor/bin/pint -- "$f"
+    git add -- "$f"
+  done
 fi
 
 echo "Running PHPStan (level 5)..."

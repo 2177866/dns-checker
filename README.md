@@ -44,6 +44,30 @@ php artisan dns:check example.com A
 - `retry_count` (int): число повторов.
 - `fallback_to_system` (bool, default `true`): если `servers` задан и результат пустой — делать fallback на системный резолвер; если `false` — вернуть пустой результат без системного запроса.
 - `log_nxdomain` (bool, default `false`): логировать NXDOMAIN через `report()`; при `false` NXDOMAIN не логируется (другие ошибки продолжают логироваться).
+- `domain_validator` (string|null, default `Alyakin\\DnsChecker\\DomainValidator::class.'@validate'`): валидатор домена перед запросом DNS. Можно отключить (`null`) или указать `"Class@method"` (статический метод, чтобы работало с `php artisan config:cache`).
+
+Пример кастомного валидатора:
+
+```php
+// config/dns-checker.php
+return [
+    // ...
+    'domain_validator' => \App\Support\Dns\DomainValidator::class.'@validate',
+];
+```
+
+```php
+namespace App\Support\Dns;
+
+final class DomainValidator
+{
+    public static function validate(string $domain): bool
+    {
+        return str_ends_with($domain, '.example')
+            && filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
+    }
+}
+```
 
 ## Разработка
 

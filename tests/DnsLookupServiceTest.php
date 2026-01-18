@@ -48,3 +48,53 @@ it('does not call report() on NXDOMAIN by default', function () {
     expect($records)->toBe([]);
     expect(ReportSpy::$calls)->toBe([]);
 });
+
+it('does not query resolver when domain is invalid (default validator)', function () {
+    $service = new class([]) extends DnsLookupService
+    {
+        public int $resolverCalls = 0;
+
+        protected function createResolver(array $nameservers)
+        {
+            $this->resolverCalls++;
+
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    return (object) ['answer' => []];
+                }
+            };
+        }
+    };
+
+    $records = $service->getRecords('bad domain', 'A');
+
+    expect($records)->toBe([]);
+    expect($service->resolverCalls)->toBe(0);
+});
+
+it('allows disabling domain validation via config', function () {
+    $service = new class(['domain_validator' => null]) extends DnsLookupService
+    {
+        public int $resolverCalls = 0;
+
+        protected function createResolver(array $nameservers)
+        {
+            $this->resolverCalls++;
+
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    return (object) ['answer' => []];
+                }
+            };
+        }
+    };
+
+    $records = $service->getRecords('bad domain', 'A');
+
+    expect($records)->toBe([]);
+    expect($service->resolverCalls)->toBe(1);
+});

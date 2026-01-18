@@ -14,6 +14,11 @@ return [
     // Default: false.
     'log_nxdomain' => false,
 
+    // Domain validator. Can be:
+    // - null: disable validation (domain is prepared by the app)
+    // - "Class@method": static method (Laravel-friendly; works with config:cache)
+    'domain_validator' => \Alyakin\DnsChecker\DomainValidator::class.'@validate',
+
     'timeout' => 2,
     'retry_count' => 1,
 ];

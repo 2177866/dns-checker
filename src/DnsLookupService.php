@@ -17,6 +17,8 @@ class DnsLookupService
 
     protected bool $logNxdomain;
 
+    protected ?string $domainValidator;
+
     public function __construct(array $config)
     {
         $this->dnsServers = $config['servers'] ?? [];
@@ -24,10 +26,18 @@ class DnsLookupService
         $this->retryCount = $config['retry_count'] ?? 1;
         $this->fallbackToSystem = $config['fallback_to_system'] ?? true;
         $this->logNxdomain = $config['log_nxdomain'] ?? false;
+        $this->domainValidator = array_key_exists('domain_validator', $config)
+            ? $config['domain_validator']
+            : (DomainValidator::class.'@validate');
     }
 
     public function getRecords(string $domain, string $type = 'A'): array
     {
+        $domain = $this->normalizeDomain($domain);
+        if (! $this->isValidDomain($domain)) {
+            return [];
+        }
+
         // Пытаемся с кастомными серверами
         if (! empty($this->dnsServers)) {
             $result = $this->resolve($domain, $type, $this->dnsServers);
@@ -98,6 +108,40 @@ class DnsLookupService
     protected function isNxdomainException(Net_DNS2_Exception $e): bool
     {
         return stripos($e->getMessage(), 'NXDOMAIN') !== false;
+    }
+
+    protected function normalizeDomain(string $domain): string
+    {
+        $domain = trim($domain);
+        $domain = rtrim($domain, '.');
+
+        return $domain;
+    }
+
+    protected function isValidDomain(string $domain): bool
+    {
+        if ($domain === '') {
+            return false;
+        }
+
+        if ($this->domainValidator === null) {
+            return true;
+        }
+
+        if (! str_contains($this->domainValidator, '@')) {
+            return false;
+        }
+
+        [$class, $method] = explode('@', $this->domainValidator, 2);
+        if ($class === '' || $method === '') {
+            return false;
+        }
+
+        if (! is_callable([$class, $method])) {
+            return false;
+        }
+
+        return (bool) call_user_func([$class, $method], $domain);
     }
 
     protected function extractRecordData($record, string $type): ?string
