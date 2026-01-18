@@ -2,11 +2,12 @@
 
 namespace Alyakin\DnsChecker;
 
+use Alyakin\DnsChecker\Contracts\DnsLookup;
 use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 
-class DnsLookupService
+class DnsLookupService implements DnsLookup
 {
     protected array $dnsServers;
 

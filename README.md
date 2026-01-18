@@ -22,9 +22,11 @@ php artisan vendor:publish --tag=dns-checker-config
 
 ```php
 use Alyakin\DnsChecker\DnsLookupService;
+use Alyakin\DnsChecker\Contracts\DnsLookup;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
+use Alyakin\DnsChecker\Facades\DnsChecker;
 
 $dns = new DnsLookupService(config('dns-checker'));
 
@@ -40,6 +42,22 @@ try {
     // timeout
 } catch (DnsQueryFailedException $e) {
     // остальные ошибки DNS
+}
+```
+
+Facade (Laravel):
+
+```php
+$ips = DnsChecker::getRecords('example.com', 'A');
+```
+
+Dependency Injection (Laravel):
+
+```php
+public function handle(DnsLookup $dns): int
+{
+    $ips = $dns->getRecords('example.com', 'A');
+    // ...
 }
 ```
 

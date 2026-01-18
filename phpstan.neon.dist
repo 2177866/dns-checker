@@ -6,5 +6,6 @@ parameters:
   excludePaths:
     - src/Commands
     - src/DnsCheckerServiceProvider.php
+    - src/Facades
   tmpDir: .phpstan
   reportUnmatchedIgnoredErrors: true

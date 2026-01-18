@@ -1,5 +1,6 @@
 <?php
 
+use Alyakin\DnsChecker\Contracts\DnsLookup;
 use Alyakin\DnsChecker\DnsLookupService;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
@@ -28,6 +29,11 @@ it('does not query system resolver when custom servers are set and fallback_to_s
 
     expect($records)->toBe([]);
     expect($service->resolverNameserversCalls)->toBe([['203.0.113.53']]);
+});
+
+it('implements DnsLookup contract', function () {
+    $service = new DnsLookupService([]);
+    expect($service)->toBeInstanceOf(DnsLookup::class);
 });
 
 it('does not call report() on NXDOMAIN by default', function () {
