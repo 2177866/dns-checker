@@ -37,7 +37,7 @@ it('does not call report() on NXDOMAIN by default', function () {
             {
                 public function query(string $domain, string $type): object
                 {
-                    throw new \Net_DNS2_Exception('NXDOMAIN');
+                    throw new RuntimeException('NXDOMAIN');
                 }
             };
         }

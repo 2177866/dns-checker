@@ -2,9 +2,6 @@
 
 namespace Alyakin\DnsChecker;
 
-use Net_DNS2_Exception;
-use Net_DNS2_Resolver;
-
 class DnsLookupService
 {
     protected array $dnsServers;
@@ -71,7 +68,7 @@ class DnsLookupService
 
             return array_values($records);
 
-        } catch (Net_DNS2_Exception $e) {
+        } catch (\Throwable $e) {
             $isNxdomain = $this->isNxdomainException($e);
             if (! $isNxdomain || $this->logNxdomain) {
                 $this->reportFailure(
@@ -85,11 +82,24 @@ class DnsLookupService
 
     protected function createResolver(array $nameservers)
     {
-        return new Net_DNS2_Resolver([
-            'nameservers' => $nameservers,
-            'timeout' => $this->timeout,
-            'retry_count' => $this->retryCount,
-        ]);
+        if (class_exists(\NetDNS2\Resolver::class)) {
+            $options = [
+                'nameservers' => $nameservers,
+                'timeout' => $this->timeout,
+            ];
+
+            return new \NetDNS2\Resolver($options);
+        }
+
+        if (class_exists('Net_DNS2_Resolver')) {
+            return new \Net_DNS2_Resolver([
+                'nameservers' => $nameservers,
+                'timeout' => $this->timeout,
+                'retry_count' => $this->retryCount,
+            ]);
+        }
+
+        throw new \RuntimeException('netdns2 resolver class not found; install pear/net_dns2');
     }
 
     protected function reportFailure(string $message): void
@@ -105,7 +115,7 @@ class DnsLookupService
         }
     }
 
-    protected function isNxdomainException(Net_DNS2_Exception $e): bool
+    protected function isNxdomainException(\Throwable $e): bool
     {
         return stripos($e->getMessage(), 'NXDOMAIN') !== false;
     }
