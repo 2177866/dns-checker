@@ -1,0 +1,10 @@
+parameters:
+  level: 5
+  paths:
+    - src
+    - tests
+  excludePaths:
+    - src/Commands
+    - src/DnsCheckerServiceProvider.php
+  tmpDir: .phpstan
+  reportUnmatchedIgnoredErrors: true

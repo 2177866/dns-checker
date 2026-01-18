@@ -4,6 +4,8 @@
 /.phpunit.result.cache
 .phpunit.cache
 composer.lock
+.phpstan/
+.pest/
 .env
 .DS_Store
 *.log

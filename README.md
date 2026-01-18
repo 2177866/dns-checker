@@ -45,7 +45,32 @@ php artisan dns:check example.com A
 - `fallback_to_system` (bool, default `true`): если `servers` задан и результат пустой — делать fallback на системный резолвер; если `false` — вернуть пустой результат без системного запроса.
 - `log_nxdomain` (bool, default `false`): логировать NXDOMAIN через `report()`; при `false` NXDOMAIN не логируется (другие ошибки продолжают логироваться).
 
+## Разработка
+
+Тесты (Pest):
+
+```bash
+composer test
+```
+
+Форматирование (Pint):
+
+```bash
+composer pint
+```
+
+Статический анализ (PHPStan level 5):
+
+```bash
+composer phpstan
+```
+
+Pre-commit hook (Pint → PHPStan → Pest):
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Лицензия
 
 MIT
-

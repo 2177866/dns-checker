@@ -2,15 +2,19 @@
 
 namespace Alyakin\DnsChecker;
 
-use Net_DNS2_Resolver;
 use Net_DNS2_Exception;
+use Net_DNS2_Resolver;
 
 class DnsLookupService
 {
     protected array $dnsServers;
+
     protected int $timeout;
+
     protected int $retryCount;
+
     protected bool $fallbackToSystem;
+
     protected bool $logNxdomain;
 
     public function __construct(array $config)
@@ -25,13 +29,13 @@ class DnsLookupService
     public function getRecords(string $domain, string $type = 'A'): array
     {
         // Пытаемся с кастомными серверами
-        if (!empty($this->dnsServers)) {
+        if (! empty($this->dnsServers)) {
             $result = $this->resolve($domain, $type, $this->dnsServers);
-            if (!empty($result)) {
+            if (! empty($result)) {
                 return $result;
             }
 
-            if (!$this->fallbackToSystem) {
+            if (! $this->fallbackToSystem) {
                 return [];
             }
         }
@@ -59,11 +63,12 @@ class DnsLookupService
 
         } catch (Net_DNS2_Exception $e) {
             $isNxdomain = $this->isNxdomainException($e);
-            if (!$isNxdomain || $this->logNxdomain) {
+            if (! $isNxdomain || $this->logNxdomain) {
                 $this->reportFailure(
-                    "DNS lookup failed (" . (empty($nameservers) ? 'system' : implode(', ', $nameservers)) . "): " . $e->getMessage()
+                    'DNS lookup failed ('.(empty($nameservers) ? 'system' : implode(', ', $nameservers)).'): '.$e->getMessage()
                 );
             }
+
             return [];
         }
     }
@@ -72,15 +77,16 @@ class DnsLookupService
     {
         return new Net_DNS2_Resolver([
             'nameservers' => $nameservers,
-            'timeout'     => $this->timeout,
+            'timeout' => $this->timeout,
             'retry_count' => $this->retryCount,
         ]);
     }
 
     protected function reportFailure(string $message): void
     {
-        if (function_exists(__NAMESPACE__ . '\\report')) {
+        if (function_exists(__NAMESPACE__.'\\report')) {
             report($message);
+
             return;
         }
 
@@ -97,11 +103,11 @@ class DnsLookupService
     protected function extractRecordData($record, string $type): ?string
     {
         return match (strtoupper($type)) {
-            'A', 'AAAA'     => $record->address ?? null,
-            'MX'            => $record->exchange ?? null,
-            'NS', 'CNAME'   => $record->target ?? null,
-            'TXT'           => $record->text ?? null,
-            default         => method_exists($record, '__toString') ? (string)$record : null,
+            'A', 'AAAA' => $record->address ?? null,
+            'MX' => $record->exchange ?? null,
+            'NS', 'CNAME' => $record->target ?? null,
+            'TXT' => $record->text ?? null,
+            default => method_exists($record, '__toString') ? (string) $record : null,
         };
     }
 }

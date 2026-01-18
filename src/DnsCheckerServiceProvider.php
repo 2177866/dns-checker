@@ -8,7 +8,7 @@ class DnsCheckerServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/dns-checker.php', 'dns-checker');
+        $this->mergeConfigFrom(__DIR__.'/../config/dns-checker.php', 'dns-checker');
 
         $this->app->singleton(DnsLookupService::class, function ($app) {
             return new DnsLookupService(config('dns-checker'));
@@ -24,7 +24,7 @@ class DnsCheckerServiceProvider extends ServiceProvider
         }
 
         $this->publishes([
-            __DIR__ . '/../config/dns-checker.php' => config_path('dns-checker.php'),
+            __DIR__.'/../config/dns-checker.php' => config_path('dns-checker.php'),
         ], 'dns-checker-config');
     }
 }

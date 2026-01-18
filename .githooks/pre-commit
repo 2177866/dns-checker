@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v php >/dev/null 2>&1; then
+  echo "php not found"
+  exit 1
+fi
+
+if [ ! -f vendor/autoload.php ]; then
+  echo "Dependencies not installed. Run: composer install"
+  exit 1
+fi
+
+PHP_FILES="$(git diff --cached --name-only --diff-filter=ACMR -- '*.php' || true)"
+
+if [ -n "$PHP_FILES" ]; then
+  echo "Running Pint on staged PHP files..."
+  php ./vendor/bin/pint $PHP_FILES
+  echo "$PHP_FILES" | while IFS= read -r f; do
+    [ -n "$f" ] && git add "$f"
+  done
+fi
+
+echo "Running PHPStan (level 5)..."
+php ./vendor/bin/phpstan analyse -c phpstan.neon.dist --no-progress
+
+echo "Running Pest..."
+php ./vendor/bin/pest

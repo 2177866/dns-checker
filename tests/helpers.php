@@ -17,4 +17,3 @@ function report(mixed $message): void
 {
     ReportSpy::$calls[] = $message;
 }
-
