@@ -65,6 +65,12 @@ composer pint
 composer phpstan
 ```
 
+Coverage (Pest + Xdebug):
+
+```bash
+XDEBUG_MODE=coverage ./vendor/bin/pest --coverage --coverage-text
+```
+
 Pre-commit hook (Pint → PHPStan → Pest):
 
 ```bash
