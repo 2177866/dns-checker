@@ -71,6 +71,12 @@ Pre-commit hook (Pint → PHPStan → Pest):
 git config core.hooksPath .githooks
 ```
 
+### Вклад в проект
+
+- Перед отправкой PR убедись, что коммиты проходят pre-commit hook (он запускает Pint по staged-файлам, затем PHPStan и Pest).
+- Настройка хука (один раз на репозиторий): `git config core.hooksPath .githooks`
+- CI на GitHub тоже прогоняет форматирование/статанализ/тесты на PR и на теги версий, поэтому сломанные коммиты не пройдут.
+
 ## Лицензия
 
 MIT
