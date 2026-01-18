@@ -22,11 +22,25 @@ php artisan vendor:publish --tag=dns-checker-config
 
 ```php
 use Alyakin\DnsChecker\DnsLookupService;
+use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
+use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
+use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 
 $dns = new DnsLookupService(config('dns-checker'));
 
 $ips = $dns->getRecords('example.com'); // A-записи
 $mx  = $dns->getRecords('example.com', 'MX');
+
+// Пример с исключениями (throw_exceptions=true в конфиге)
+try {
+    $ips = $dns->getRecords('does-not-exist.example', 'A');
+} catch (DnsRecordNotFoundException $e) {
+    // NXDOMAIN
+} catch (DnsTimeoutException $e) {
+    // timeout
+} catch (DnsQueryFailedException $e) {
+    // остальные ошибки DNS
+}
 ```
 
 CLI:
@@ -44,6 +58,7 @@ php artisan dns:check example.com A
 - `retry_count` (int): число повторов.
 - `fallback_to_system` (bool, default `true`): если `servers` задан и результат пустой — делать fallback на системный резолвер; если `false` — вернуть пустой результат без системного запроса.
 - `log_nxdomain` (bool, default `false`): логировать NXDOMAIN через `report()`; при `false` NXDOMAIN не логируется (другие ошибки продолжают логироваться).
+- `throw_exceptions` (bool, default `false`): если `true` — вместо `[]` выбрасываются типизированные исключения (`DnsRecordNotFoundException`, `DnsTimeoutException`, `DnsQueryFailedException`).
 - `domain_validator` (string|null, default `Alyakin\\DnsChecker\\DomainValidator::class.'@validate'`): валидатор домена перед запросом DNS. Можно отключить (`null`) или указать `"Class@method"` (статический метод, чтобы работало с `php artisan config:cache`).
 
 Пример кастомного валидатора:

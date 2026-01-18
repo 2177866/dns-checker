@@ -14,6 +14,10 @@ return [
     // Default: false.
     'log_nxdomain' => false,
 
+    // Throw typed exceptions instead of returning [] and calling report().
+    // Default: false (backward compatible).
+    'throw_exceptions' => false,
+
     // Domain validator. Can be:
     // - null: disable validation (domain is prepared by the app)
     // - "Class@method": static method (Laravel-friendly; works with config:cache)

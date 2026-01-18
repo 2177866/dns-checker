@@ -1,6 +1,8 @@
 <?php
 
 use Alyakin\DnsChecker\DnsLookupService;
+use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
+use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 use Alyakin\DnsChecker\ReportSpy;
 
 it('does not query system resolver when custom servers are set and fallback_to_system=false', function () {
@@ -98,3 +100,39 @@ it('allows disabling domain validation via config', function () {
     expect($records)->toBe([]);
     expect($service->resolverCalls)->toBe(1);
 });
+
+it('throws DnsRecordNotFoundException on NXDOMAIN when throw_exceptions=true', function () {
+    $service = new class(['throw_exceptions' => true]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    throw new RuntimeException('NXDOMAIN');
+                }
+            };
+        }
+    };
+
+    $service->getRecords('does-not-exist.example', 'A');
+})->throws(DnsRecordNotFoundException::class);
+
+it('throws DnsTimeoutException on timeout when throw_exceptions=true', function () {
+    $service = new class(['throw_exceptions' => true]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    throw new RuntimeException('request timed out');
+                }
+            };
+        }
+    };
+
+    $service->getRecords('example.com', 'A');
+})->throws(DnsTimeoutException::class);

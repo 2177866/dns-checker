@@ -2,6 +2,10 @@
 
 namespace Alyakin\DnsChecker;
 
+use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
+use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
+use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
+
 class DnsLookupService
 {
     protected array $dnsServers;
@@ -16,6 +20,8 @@ class DnsLookupService
 
     protected ?string $domainValidator;
 
+    protected bool $throwExceptions;
+
     public function __construct(array $config)
     {
         $this->dnsServers = $config['servers'] ?? [];
@@ -23,6 +29,7 @@ class DnsLookupService
         $this->retryCount = $config['retry_count'] ?? 1;
         $this->fallbackToSystem = $config['fallback_to_system'] ?? true;
         $this->logNxdomain = $config['log_nxdomain'] ?? false;
+        $this->throwExceptions = $config['throw_exceptions'] ?? false;
         $this->domainValidator = array_key_exists('domain_validator', $config)
             ? $config['domain_validator']
             : (DomainValidator::class.'@validate');
@@ -70,6 +77,10 @@ class DnsLookupService
 
         } catch (\Throwable $e) {
             $isNxdomain = $this->isNxdomainException($e);
+            if ($this->throwExceptions) {
+                throw $this->mapException($e, $domain, $type, $nameservers);
+            }
+
             if (! $isNxdomain || $this->logNxdomain) {
                 $this->reportFailure(
                     'DNS lookup failed ('.(empty($nameservers) ? 'system' : implode(', ', $nameservers)).'): '.$e->getMessage()
@@ -117,7 +128,52 @@ class DnsLookupService
 
     protected function isNxdomainException(\Throwable $e): bool
     {
+        if ($e instanceof \NetDNS2\Exception) {
+            return $e->getCode() === \NetDNS2\ENUM\Error::DNS_NXDOMAIN->value;
+        }
+
         return stripos($e->getMessage(), 'NXDOMAIN') !== false;
+    }
+
+    protected function isTimeoutException(\Throwable $e): bool
+    {
+        $message = $e->getMessage();
+
+        return stripos($message, 'timed out') !== false
+            || stripos($message, 'timeout') !== false;
+    }
+
+    protected function mapException(\Throwable $e, string $domain, string $type, array $nameservers): \RuntimeException
+    {
+        $resolver = empty($nameservers) ? 'system' : implode(', ', $nameservers);
+
+        if ($this->isNxdomainException($e)) {
+            return new DnsRecordNotFoundException(
+                'DNS record not found (NXDOMAIN) via '.$resolver.': '.$e->getMessage(),
+                $domain,
+                $type,
+                $resolver,
+                $e
+            );
+        }
+
+        if ($this->isTimeoutException($e)) {
+            return new DnsTimeoutException(
+                'DNS lookup timed out via '.$resolver.': '.$e->getMessage(),
+                $domain,
+                $type,
+                $resolver,
+                $e
+            );
+        }
+
+        return new DnsQueryFailedException(
+            'DNS lookup failed via '.$resolver.': '.$e->getMessage(),
+            $domain,
+            $type,
+            $resolver,
+            $e
+        );
     }
 
     protected function normalizeDomain(string $domain): string
