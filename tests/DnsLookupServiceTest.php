@@ -130,6 +130,27 @@ it('does not call report() on NXDOMAIN by default', function () {
     expect(ReportSpy::$calls)->toBe([]);
 });
 
+it('does not call report() on NXDOMAIN (Net_DNS2_Exception code=3) by default', function () {
+    $service = new class([]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    throw new Net_DNS2_Exception('no such domain', 3);
+                }
+            };
+        }
+    };
+
+    $records = $service->getRecords('does-not-exist.example', 'A');
+
+    expect($records)->toBe([]);
+    expect(ReportSpy::$calls)->toBe([]);
+});
+
 it('does not query resolver when domain is invalid (default validator)', function () {
     $service = new class([]) extends DnsLookupService
     {

@@ -129,8 +129,16 @@ class DnsLookupService implements DnsLookup
 
     protected function isNxdomainException(\Throwable $e): bool
     {
-        if ($e instanceof \NetDNS2\Exception) {
-            return $e->getCode() === \NetDNS2\ENUM\Error::DNS_NXDOMAIN->value;
+        if (class_exists('NetDNS2\\Exception') && $e instanceof \NetDNS2\Exception) {
+            if (class_exists('NetDNS2\\ENUM\\Error')) {
+                return $e->getCode() === \NetDNS2\ENUM\Error::DNS_NXDOMAIN->value;
+            }
+
+            return $e->getCode() === 3;
+        }
+
+        if (class_exists('Net_DNS2_Exception') && $e instanceof \Net_DNS2_Exception) {
+            return $e->getCode() === 3;
         }
 
         return stripos($e->getMessage(), 'NXDOMAIN') !== false;
