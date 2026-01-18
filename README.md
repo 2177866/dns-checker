@@ -4,8 +4,7 @@
 [![PHP Version](https://img.shields.io/packagist/php-v/alyakin/dns-checker)](https://packagist.org/packages/alyakin/dns-checker)
 [![License](https://img.shields.io/packagist/l/alyakin/dns-checker.svg)](LICENSE)
 
-**Описание:**  
-Это обертка над [`mikepultz/netdns2`](https://github.com/mikepultz/netdns2) для быстрой и управляемой проверки DNS-записей с возможностью fallback на системный резолвер и `gethostbyname`.
+Обёртка над [`pear/net_dns2`](https://github.com/mikepultz/netdns2) для управляемых DNS‑проверок с поддержкой списка кастомных DNS‑серверов и fallback на системный резолвер.
 
 ## Установка
 
@@ -13,42 +12,40 @@
 composer require alyakin/dns-checker
 ```
 
-## Публикация конфига
+## Публикация конфига (Laravel)
 
 ```bash
 php artisan vendor:publish --tag=dns-checker-config
 ```
 
-## Пример использования
+## Использование
 
 ```php
 use Alyakin\DnsChecker\DnsLookupService;
 
 $dns = new DnsLookupService(config('dns-checker'));
 
-$ips = $dns->getRecords('example.com'); // по умолчанию A-запись
+$ips = $dns->getRecords('example.com'); // A-записи
+$mx  = $dns->getRecords('example.com', 'MX');
 ```
 
-## Примеры:
+CLI:
 
-### Проверка MX-записей:
-
-```php
-$mx = $dns->getRecords('example.com', 'MX');
+```bash
+php artisan dns:check example.com A
 ```
 
-### Проверка TXT-записей (например, SPF):
+## Конфигурация
 
-```php
-$txt = $dns->getRecords('example.com', 'TXT');
-```
+Файл: `config/dns-checker.php`
 
-### Проверка CNAME:
-
-```php
-$cname = $dns->getRecords('sub.example.com', 'CNAME');
-```
+- `servers` (array<string>): список DNS‑серверов (ip/host) для запроса через Net_DNS2.
+- `timeout` (int): таймаут.
+- `retry_count` (int): число повторов.
+- `fallback_to_system` (bool, default `true`): если `servers` задан и результат пустой — делать fallback на системный резолвер; если `false` — вернуть пустой результат без системного запроса.
+- `log_nxdomain` (bool, default `false`): логировать NXDOMAIN через `report()`; при `false` NXDOMAIN не логируется (другие ошибки продолжают логироваться).
 
 ## Лицензия
-Этот пакет использует [Net_DNS2](https://github.com/mikepultz/netdns2), лицензированный на условиях лицензии BSD 2-Clause.
-Данный пакет распространяется по лицензии MIT
+
+MIT
+

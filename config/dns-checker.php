@@ -6,6 +6,14 @@ return [
         '1.1.1.1', // Cloudflare's DNS
         '9.9.9.9', // Quad9 DNS
     ],
+    // When custom `servers` are set and the lookup returns empty, try system resolver as a fallback.
+    // Default: true (backward compatible).
+    'fallback_to_system' => true,
+
+    // Log NXDOMAIN via report(). Other DNS errors are still reported.
+    // Default: false.
+    'log_nxdomain' => false,
+
     'timeout' => 2,
     'retry_count' => 1,
 ];

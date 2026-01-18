@@ -13,10 +13,24 @@
         "php": ">=8.1",
         "pear/net_dns2": "^1.5"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
     "autoload": {
         "psr-4": {
             "Alyakin\\DnsChecker\\": "src/"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Alyakin\\DnsChecker\\Tests\\": "tests/"
+        },
+        "files": [
+            "tests/helpers.php"
+        ]
+    },
+    "scripts": {
+        "test": "phpunit"
     },
     "extra": {
         "laravel": {
