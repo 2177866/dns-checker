@@ -11,6 +11,11 @@ class DnsCheckerServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/dns-checker.php', 'dns-checker');
 
+        $this->app->singleton(DnsCheckerFactory::class, function () {
+            return new DnsCheckerFactory(config('dns-checker'));
+        });
+        $this->app->alias(DnsCheckerFactory::class, 'dns-checker.factory');
+
         $this->app->singleton(DnsLookupService::class, function ($app) {
             return new DnsLookupService(config('dns-checker'));
         });

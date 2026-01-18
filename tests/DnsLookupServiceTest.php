@@ -1,6 +1,7 @@
 <?php
 
 use Alyakin\DnsChecker\Contracts\DnsLookup;
+use Alyakin\DnsChecker\DnsCheckerFactory;
 use Alyakin\DnsChecker\DnsLookupService;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
@@ -34,6 +35,78 @@ it('does not query system resolver when custom servers are set and fallback_to_s
 it('implements DnsLookup contract', function () {
     $service = new DnsLookupService([]);
     expect($service)->toBeInstanceOf(DnsLookup::class);
+});
+
+it('supports fluent config overrides via factory client', function () {
+    $received = [];
+
+    $factory = new DnsCheckerFactory(
+        ['timeout' => 2, 'retry_count' => 1],
+        function (array $config) use (&$received): DnsLookup {
+            $received[] = $config;
+
+            return new class implements DnsLookup
+            {
+                public function getRecords(string $domain, string $type = 'A'): array
+                {
+                    return [];
+                }
+            };
+        }
+    );
+
+    $factory
+        ->usingServer('8.8.8.8')
+        ->withTimeout(5)
+        ->setRetries(3)
+        ->fallbackToSystem(false)
+        ->query('example.com', 'TXT');
+
+    expect($received)->toHaveCount(1);
+    expect($received[0])->toMatchArray([
+        'servers' => ['8.8.8.8'],
+        'timeout' => 5,
+        'retry_count' => 3,
+        'fallback_to_system' => false,
+    ]);
+});
+
+it('supports getConfig, setConfig, resetConfig on fluent client', function () {
+    $received = [];
+
+    $factory = new DnsCheckerFactory(
+        ['timeout' => 2, 'retry_count' => 1],
+        function (array $config) use (&$received): DnsLookup {
+            $received[] = $config;
+
+            return new class implements DnsLookup
+            {
+                public function getRecords(string $domain, string $type = 'A'): array
+                {
+                    return [];
+                }
+            };
+        }
+    );
+
+    $client = $factory->make();
+
+    expect($client->getConfig())->toMatchArray(['timeout' => 2, 'retry_count' => 1]);
+
+    $client->setConfig(['servers' => ['8.8.8.8'], 'timeout' => 5]);
+    expect($client->getConfig())->toBe(['servers' => ['8.8.8.8'], 'timeout' => 5]);
+
+    $client->query('example.com', 'A');
+    expect($received)->toHaveCount(1);
+    expect($received[0])->toBe(['servers' => ['8.8.8.8'], 'timeout' => 5]);
+
+    $client
+        ->usingServer('1.1.1.1')
+        ->withTimeout(10);
+
+    $client->resetConfig()->query('example.com', 'A');
+    expect($received)->toHaveCount(2);
+    expect($received[1])->toMatchArray(['timeout' => 2, 'retry_count' => 1]);
 });
 
 it('does not call report() on NXDOMAIN by default', function () {

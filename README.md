@@ -34,6 +34,9 @@ $ips = $dns->getRecords('example.com'); // A-записи
 $mx  = $dns->getRecords('example.com', 'MX');
 
 // Пример с исключениями (throw_exceptions=true в конфиге)
+// Example (throw_exceptions=false, default): returns [] on errors (NXDOMAIN is not reported by default)
+$ips = $dns->getRecords('does-not-exist.example', 'A'); // []
+
 try {
     $ips = $dns->getRecords('does-not-exist.example', 'A');
 } catch (DnsRecordNotFoundException $e) {
@@ -45,11 +48,32 @@ try {
 }
 ```
 
+Note: `config()`, Facade (`DnsChecker::...`) and DI examples work in Laravel. Outside Laravel, pass config array directly:
+
+```php
+$dns = new DnsLookupService([
+    'servers' => ['8.8.8.8'],
+    'timeout' => 2,
+    'retry_count' => 1,
+]);
+```
+
 Facade (Laravel):
 
 ```php
 $ips = DnsChecker::getRecords('example.com', 'A');
 ```
+
+Fluent API (Laravel):
+
+```php
+$result = DnsChecker::usingServer('8.8.8.8')
+    ->withTimeout(5)
+    ->setRetries(3)
+    ->query('example.com', 'TXT');
+```
+
+Note: `usingServer()` overrides `servers` for this call. It won't try other servers from config (only system fallback if `fallback_to_system=true`).
 
 Dependency Injection (Laravel):
 
