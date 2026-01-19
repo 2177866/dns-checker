@@ -4,53 +4,43 @@
 [![PHP Version](https://img.shields.io/packagist/php-v/alyakin/dns-checker)](https://packagist.org/packages/alyakin/dns-checker)
 [![License](https://img.shields.io/packagist/l/alyakin/dns-checker.svg)](LICENSE)
 
-Обёртка над [`pear/net_dns2`](https://github.com/mikepultz/netdns2) для управляемых DNS‑проверок с поддержкой списка кастомных DNS‑серверов и fallback на системный резолвер.
+A Laravel-friendly DNS lookup wrapper over [`pear/net_dns2`](https://github.com/mikepultz/netdns2) with:
+- Custom DNS servers + optional fallback to the system resolver
+- Optional typed exceptions (`throw_exceptions`)
+- Optional NXDOMAIN logging control
+- Optional Laravel Cache-backed caching (Redis/Memcached/Database/etc), avoiding netdns2 file/shmop cache pitfalls
+- Facade, fluent API and DI support
 
-## Установка
+## Installation
 
 ```bash
 composer require alyakin/dns-checker
 ```
 
-## Публикация конфига (Laravel)
+## Publish config (Laravel)
 
 ```bash
 php artisan vendor:publish --tag=dns-checker-config
 ```
 
-## Использование
+## Usage
+
+### Plain usage
 
 ```php
 use Alyakin\DnsChecker\DnsLookupService;
-use Alyakin\DnsChecker\Contracts\DnsLookup;
-use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
-use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
-use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
-use Alyakin\DnsChecker\Facades\DnsChecker;
 
 $dns = new DnsLookupService(config('dns-checker'));
 
-$ips = $dns->getRecords('example.com'); // A-записи
-$mx  = $dns->getRecords('example.com', 'MX');
-
-// Пример с исключениями (throw_exceptions=true в конфиге)
-// Example (throw_exceptions=false, default): returns [] on errors (NXDOMAIN is not reported by default)
-$ips = $dns->getRecords('does-not-exist.example', 'A'); // []
-
-try {
-    $ips = $dns->getRecords('does-not-exist.example', 'A');
-} catch (DnsRecordNotFoundException $e) {
-    // NXDOMAIN
-} catch (DnsTimeoutException $e) {
-    // timeout
-} catch (DnsQueryFailedException $e) {
-    // остальные ошибки DNS
-}
+$ips = $dns->getRecords('example.com');        // A records
+$txt = $dns->getRecords('example.com', 'TXT'); // TXT records
 ```
 
-Note: `config()`, Facade (`DnsChecker::...`) and DI examples work in Laravel. Outside Laravel, pass config array directly:
+If you are not in Laravel, pass the config array directly:
 
 ```php
+use Alyakin\DnsChecker\DnsLookupService;
+
 $dns = new DnsLookupService([
     'servers' => ['8.8.8.8'],
     'timeout' => 2,
@@ -58,24 +48,96 @@ $dns = new DnsLookupService([
 ]);
 ```
 
-Facade (Laravel):
+### Error handling
+
+By default (`throw_exceptions=false`) errors result in an empty array:
 
 ```php
+$records = $dns->getRecords('does-not-exist.example', 'A'); // []
+```
+
+With `throw_exceptions=true`, you can use `try/catch`:
+
+```php
+use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
+use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
+use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
+
+try {
+    $records = $dns->getRecords('does-not-exist.example', 'A');
+} catch (DnsRecordNotFoundException $e) {
+    // NXDOMAIN
+} catch (DnsTimeoutException $e) {
+    // timeout
+} catch (DnsQueryFailedException $e) {
+    // other DNS errors
+}
+```
+
+### Facade (Laravel)
+
+```php
+use Alyakin\DnsChecker\Facades\DnsChecker;
+
 $ips = DnsChecker::getRecords('example.com', 'A');
 ```
 
-Fluent API (Laravel):
+### Fluent API (Laravel)
 
 ```php
+use Alyakin\DnsChecker\Facades\DnsChecker;
+
 $result = DnsChecker::usingServer('8.8.8.8')
     ->withTimeout(5)
     ->setRetries(3)
     ->query('example.com', 'TXT');
 ```
 
-Note: `usingServer()` overrides `servers` for this call. It won't try other servers from config (only system fallback if `fallback_to_system=true`).
+Notes:
+- `usingServer()` overrides `servers` for this call; it will not try other configured servers.
+- System fallback may still happen if `fallback_to_system=true`.
 
-Laravel Cache:
+### Dependency Injection (Laravel)
+
+```php
+use Alyakin\DnsChecker\Contracts\DnsLookup;
+
+final class SomeJob
+{
+    public function handle(DnsLookup $dns): void
+    {
+        $ips = $dns->getRecords('example.com', 'A');
+    }
+}
+```
+
+### CLI (Laravel)
+
+```bash
+php artisan dns:check example.com A
+```
+
+## Configuration
+
+File: `config/dns-checker.php`
+
+- `servers` (array<string>): DNS servers (IP/host) to query first.
+- `timeout` (int|float): resolver timeout.
+- `retry_count` (int): retry count (netdns2 v1 only; netdns2 v2 does not expose `retry_count` as an option).
+- `fallback_to_system` (bool, default `true`): when `servers` are set and the result is empty, try the system resolver; if `false`, return empty result without system lookup.
+- `log_nxdomain` (bool, default `false`): whether to call `report()` on NXDOMAIN. Other DNS errors are still reported.
+- `throw_exceptions` (bool, default `false`): if `true`, throw typed exceptions instead of returning `[]` and calling `report()`.
+- `domain_validator` (string|null): `"Class@method"` validator or `null` to disable validation. Default is `Alyakin\\DnsChecker\\DomainValidator::class.'@validate'`.
+- `cache` (array):
+  - `enabled` (bool): enable Laravel Cache-backed caching for DNS results.
+  - `store` (string|null): cache store name from `config/cache.php` (e.g. `redis`, `file`, `database`, `memcached`). `null` uses the default store.
+  - `ttl` (int): TTL in seconds.
+  - `prefix` (string): cache key prefix.
+  - `cache_empty` (bool): cache empty NOERROR/NODATA responses (exceptions are not cached).
+
+### Laravel Cache example
+
+If Redis is your default Laravel cache driver, just enable caching and keep `store=null`:
 
 ```php
 // config/dns-checker.php
@@ -83,7 +145,7 @@ return [
     // ...
     'cache' => [
         'enabled' => true,
-        'store' => 'redis', // or null for default
+        'store' => null,
         'ttl' => 60,
         'prefix' => 'dns-checker',
         'cache_empty' => false,
@@ -91,35 +153,17 @@ return [
 ];
 ```
 
-Dependency Injection (Laravel):
+To pin a specific store:
 
 ```php
-public function handle(DnsLookup $dns): int
-{
-    $ips = $dns->getRecords('example.com', 'A');
-    // ...
-}
+'cache' => [
+    'enabled' => true,
+    'store' => 'redis', // or 'file' / 'database' / 'memcached'
+    'ttl' => 60,
+],
 ```
 
-CLI:
-
-```bash
-php artisan dns:check example.com A
-```
-
-## Конфигурация
-
-Файл: `config/dns-checker.php`
-
-- `servers` (array<string>): список DNS‑серверов (ip/host) для запроса через Net_DNS2.
-- `timeout` (int): таймаут.
-- `retry_count` (int): число повторов.
-- `fallback_to_system` (bool, default `true`): если `servers` задан и результат пустой — делать fallback на системный резолвер; если `false` — вернуть пустой результат без системного запроса.
-- `log_nxdomain` (bool, default `false`): логировать NXDOMAIN через `report()`; при `false` NXDOMAIN не логируется (другие ошибки продолжают логироваться).
-- `throw_exceptions` (bool, default `false`): если `true` — вместо `[]` выбрасываются типизированные исключения (`DnsRecordNotFoundException`, `DnsTimeoutException`, `DnsQueryFailedException`).
-- `domain_validator` (string|null, default `Alyakin\\DnsChecker\\DomainValidator::class.'@validate'`): валидатор домена перед запросом DNS. Можно отключить (`null`) или указать `"Class@method"` (статический метод, чтобы работало с `php artisan config:cache`).
-
-Пример кастомного валидатора:
+### Custom domain validator example
 
 ```php
 // config/dns-checker.php
@@ -142,30 +186,12 @@ final class DomainValidator
 }
 ```
 
-## Разработка
-
-Тесты (Pest):
+## Development
 
 ```bash
 composer test
-```
-
-Форматирование (Pint):
-
-```bash
 composer pint
-```
-
-Статический анализ (PHPStan level 5):
-
-```bash
 composer phpstan
-```
-
-Coverage (Pest + Xdebug):
-
-```bash
-XDEBUG_MODE=coverage ./vendor/bin/pest --coverage --coverage-text
 ```
 
 Pre-commit hook (Pint → PHPStan → Pest):
@@ -174,12 +200,7 @@ Pre-commit hook (Pint → PHPStan → Pest):
 git config core.hooksPath .githooks
 ```
 
-### Вклад в проект
-
-- Перед отправкой PR убедись, что коммиты проходят pre-commit hook (он запускает Pint по staged-файлам, затем PHPStan и Pest).
-- Настройка хука (один раз на репозиторий): `git config core.hooksPath .githooks`
-- CI на GitHub тоже прогоняет форматирование/статанализ/тесты на PR и на теги версий, поэтому сломанные коммиты не пройдут.
-
-## Лицензия
+## License
 
 MIT
+
