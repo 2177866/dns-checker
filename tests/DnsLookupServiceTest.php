@@ -1,5 +1,6 @@
 <?php
 
+use Alyakin\DnsChecker\CacheSpy;
 use Alyakin\DnsChecker\Contracts\DnsLookup;
 use Alyakin\DnsChecker\DnsCheckerFactory;
 use Alyakin\DnsChecker\DnsLookupService;
@@ -128,6 +129,34 @@ it('does not call report() on NXDOMAIN by default', function () {
 
     expect($records)->toBe([]);
     expect(ReportSpy::$calls)->toBe([]);
+});
+
+it('caches successful DNS responses via Laravel cache when enabled', function () {
+    CacheSpy::reset();
+
+    $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests']]) extends DnsLookupService
+    {
+        public int $resolverCalls = 0;
+
+        protected function createResolver(array $nameservers)
+        {
+            $this->resolverCalls++;
+
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    return (object) ['answer' => [(object) ['address' => '1.2.3.4']]];
+                }
+            };
+        }
+    };
+
+    expect($service->getRecords('example.com', 'A'))->toBe(['1.2.3.4']);
+    expect($service->resolverCalls)->toBe(1);
+
+    expect($service->getRecords('example.com', 'A'))->toBe(['1.2.3.4']);
+    expect($service->resolverCalls)->toBe(1);
 });
 
 it('does not call report() on NXDOMAIN (Net_DNS2_Exception code=3) by default', function () {

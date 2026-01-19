@@ -75,6 +75,22 @@ $result = DnsChecker::usingServer('8.8.8.8')
 
 Note: `usingServer()` overrides `servers` for this call. It won't try other servers from config (only system fallback if `fallback_to_system=true`).
 
+Laravel Cache:
+
+```php
+// config/dns-checker.php
+return [
+    // ...
+    'cache' => [
+        'enabled' => true,
+        'store' => 'redis', // or null for default
+        'ttl' => 60,
+        'prefix' => 'dns-checker',
+        'cache_empty' => false,
+    ],
+];
+```
+
 Dependency Injection (Laravel):
 
 ```php

@@ -23,6 +23,11 @@ class DnsLookupService implements DnsLookup
 
     protected bool $throwExceptions;
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected array $cacheConfig;
+
     public function __construct(array $config)
     {
         $this->dnsServers = $config['servers'] ?? [];
@@ -31,6 +36,7 @@ class DnsLookupService implements DnsLookup
         $this->fallbackToSystem = $config['fallback_to_system'] ?? true;
         $this->logNxdomain = $config['log_nxdomain'] ?? false;
         $this->throwExceptions = $config['throw_exceptions'] ?? false;
+        $this->cacheConfig = $config['cache'] ?? [];
         $this->domainValidator = array_key_exists('domain_validator', $config)
             ? $config['domain_validator']
             : (DomainValidator::class.'@validate');
@@ -61,6 +67,22 @@ class DnsLookupService implements DnsLookup
 
     protected function resolve(string $domain, string $type, array $nameservers = []): array
     {
+        $cache = $this->getCacheRepository();
+        $cacheKey = null;
+        $cacheTtl = null;
+        $cacheEmpty = false;
+        if ($cache !== null && ($this->cacheConfig['enabled'] ?? false)) {
+            $cacheKey = $this->makeCacheKey($domain, $type, $nameservers);
+            $cacheTtl = $this->cacheConfig['ttl'] ?? 60;
+            $cacheEmpty = (bool) ($this->cacheConfig['cache_empty'] ?? false);
+
+            $cached = $cache->get($cacheKey);
+            if (is_array($cached)) {
+                /** @var array<int, string> $cached */
+                return $cached;
+            }
+        }
+
         try {
             $resolver = $this->createResolver($nameservers);
 
@@ -74,7 +96,15 @@ class DnsLookupService implements DnsLookup
                 }
             }
 
-            return array_values($records);
+            $records = array_values($records);
+
+            if ($cache !== null && ($this->cacheConfig['enabled'] ?? false) && $cacheKey !== null && $cacheTtl !== null) {
+                if (! empty($records) || $cacheEmpty) {
+                    $cache->put($cacheKey, $records, $cacheTtl);
+                }
+            }
+
+            return $records;
 
         } catch (\Throwable $e) {
             $isNxdomain = $this->isNxdomainException($e);
@@ -150,6 +180,51 @@ class DnsLookupService implements DnsLookup
 
         return stripos($message, 'timed out') !== false
             || stripos($message, 'timeout') !== false;
+    }
+
+    protected function getCacheRepository(): ?object
+    {
+        if (! ($this->cacheConfig['enabled'] ?? false)) {
+            return null;
+        }
+
+        if (! function_exists('cache')) {
+            return null;
+        }
+
+        try {
+            $cache = \cache();
+            if (! is_object($cache) || ! method_exists($cache, 'get') || ! method_exists($cache, 'put')) {
+                return null;
+            }
+
+            $store = $this->cacheConfig['store'] ?? null;
+            if ($store !== null && method_exists($cache, 'store')) {
+                $cache = $cache->store($store);
+            }
+
+            if (! is_object($cache) || ! method_exists($cache, 'get') || ! method_exists($cache, 'put')) {
+                return null;
+            }
+
+            return $cache;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    protected function makeCacheKey(string $domain, string $type, array $nameservers): string
+    {
+        $prefix = (string) ($this->cacheConfig['prefix'] ?? 'dns-checker');
+        $payload = [
+            'domain' => strtolower($domain),
+            'type' => strtoupper($type),
+            'nameservers' => array_values($nameservers),
+            'timeout' => $this->timeout,
+            'retry_count' => $this->retryCount,
+        ];
+
+        return $prefix.':'.hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES));
     }
 
     protected function mapException(\Throwable $e, string $domain, string $type, array $nameservers): \RuntimeException

@@ -18,6 +18,20 @@ return [
     // Default: false (backward compatible).
     'throw_exceptions' => false,
 
+    // Laravel Cache integration (redis/memcached/database/etc).
+    // Note: this is an outer cache for DNS query results; it does not use netdns2 built-in file/shmop cache.
+    'cache' => [
+        'enabled' => false,
+        // Cache store name (e.g. 'redis', 'memcached', 'database'); null = default store.
+        'store' => null,
+        // TTL in seconds.
+        'ttl' => 60,
+        // Cache key prefix.
+        'prefix' => 'dns-checker',
+        // Cache empty NOERROR/NODATA responses (does not apply to exceptions).
+        'cache_empty' => false,
+    ],
+
     // Domain validator. Can be:
     // - null: disable validation (domain is prepared by the app)
     // - "Class@method": static method (Laravel-friendly; works with config:cache)
