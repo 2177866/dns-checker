@@ -265,3 +265,256 @@ it('throws DnsTimeoutException on timeout when throw_exceptions=true', function 
 
     $service->getRecords('example.com', 'A');
 })->throws(DnsTimeoutException::class);
+
+it('supports fluent config mutation and shortcut query methods on DnsCheckerClient', function () {
+    $receivedConfigs = [];
+    $receivedQueries = [];
+
+    $client = new \Alyakin\DnsChecker\DnsCheckerClient(
+        ['timeout' => 2],
+        function (array $config) use (&$receivedConfigs, &$receivedQueries): DnsLookup {
+            $receivedConfigs[] = $config;
+
+            return new class(function (string $domain, string $type) use (&$receivedQueries): void {
+                $receivedQueries[] = [$domain, $type];
+            }) implements DnsLookup
+            {
+                public function __construct(private \Closure $recordQuery) {}
+
+                public function getRecords(string $domain, string $type = 'A'): array
+                {
+                    ($this->recordQuery)($domain, $type);
+
+                    return ["$type:$domain"];
+                }
+            };
+        },
+        ['timeout' => 2],
+    );
+
+    expect($client->getConfig())->toBe(['timeout' => 2]);
+
+    $client
+        ->usingServers(['8.8.8.8', '1.1.1.1'])
+        ->addServer('9.9.9.9')
+        ->withTimeout(5)
+        ->withRetries(3)
+        ->fallbackToSystem(false)
+        ->logNxdomain()
+        ->throwExceptions()
+        ->validateDomain(\Alyakin\DnsChecker\DomainValidator::class.'@validate');
+
+    expect($client->getConfig())->toMatchArray([
+        'servers' => ['8.8.8.8', '1.1.1.1', '9.9.9.9'],
+        'timeout' => 5,
+        'retry_count' => 3,
+        'fallback_to_system' => false,
+        'log_nxdomain' => true,
+        'throw_exceptions' => true,
+        'domain_validator' => \Alyakin\DnsChecker\DomainValidator::class.'@validate',
+    ]);
+
+    expect($client->clearServers()->getConfig()['servers'])->toBe([]);
+    $client->withoutDomainValidation();
+
+    expect($client->getRecords('example.com', 'A'))->toBe(['A:example.com']);
+    expect($client->a('example.com'))->toBe(['A:example.com']);
+    expect($client->aaaa('example.com'))->toBe(['AAAA:example.com']);
+    expect($client->mx('example.com'))->toBe(['MX:example.com']);
+    expect($client->ns('example.com'))->toBe(['NS:example.com']);
+    expect($client->txt('example.com'))->toBe(['TXT:example.com']);
+    expect($client->cname('example.com'))->toBe(['CNAME:example.com']);
+
+    expect($receivedConfigs)->toHaveCount(7);
+    expect($receivedQueries)->toHaveCount(7);
+
+    $client->setConfig(['servers' => ['8.8.4.4']]);
+    expect($client->getConfig())->toBe(['servers' => ['8.8.4.4']]);
+
+    $client->resetConfig();
+    expect($client->getConfig())->toBe(['timeout' => 2]);
+});
+
+it('exposes the same fluent API on DnsCheckerFactory', function () {
+    $receivedConfigs = [];
+
+    $factory = new DnsCheckerFactory(
+        ['timeout' => 2],
+        function (array $config) use (&$receivedConfigs): DnsLookup {
+            $receivedConfigs[] = $config;
+
+            return new class implements DnsLookup
+            {
+                public function getRecords(string $domain, string $type = 'A'): array
+                {
+                    return ["$type:$domain"];
+                }
+            };
+        }
+    );
+
+    expect($factory->make())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->usingServer('8.8.8.8'))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->usingServers(['1.1.1.1']))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->withTimeout(5))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->withRetries(3))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->setRetries(4))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->fallbackToSystem(false))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->logNxdomain())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->throwExceptions())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->validateDomain(\Alyakin\DnsChecker\DomainValidator::class.'@validate'))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->withoutDomainValidation())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+
+    expect($factory->query('example.com', 'TXT'))->toBe(['TXT:example.com']);
+    expect($factory->getRecords('example.com', 'A'))->toBe(['A:example.com']);
+    expect($receivedConfigs)->toHaveCount(2);
+});
+
+it('extracts record values for common types and normalizes domains', function () {
+    $service = new class([]) extends DnsLookupService
+    {
+        public array $queries = [];
+
+        protected function createResolver(array $nameservers)
+        {
+            $queries = &$this->queries;
+
+            return new class(function (string $domain, string $type) use (&$queries): void {
+                $queries[] = [$domain, $type];
+            })
+            {
+
+                public function __construct(private \Closure $recordQuery) {}
+
+                public function query(string $domain, string $type): object
+                {
+                    ($this->recordQuery)($domain, $type);
+
+                    return (object) [
+                        'answer' => match ($type) {
+                            'A' => [(object) ['address' => '1.2.3.4']],
+                            'MX' => [(object) ['exchange' => 'mx.example.com']],
+                            'NS' => [(object) ['target' => 'ns1.example.com']],
+                            'TXT' => [(object) ['text' => 'hello']],
+                            default => [new class
+                            {
+                                public function __toString(): string
+                                {
+                                    return 'raw';
+                                }
+                            }],
+                        },
+                    ];
+                }
+            };
+        }
+    };
+
+    expect($service->getRecords(' example.com. ', 'A'))->toBe(['1.2.3.4']);
+    expect($service->getRecords('example.com', 'MX'))->toBe(['mx.example.com']);
+    expect($service->getRecords('example.com', 'NS'))->toBe(['ns1.example.com']);
+    expect($service->getRecords('example.com', 'TXT'))->toBe(['hello']);
+    expect($service->getRecords('example.com', 'CAA'))->toBe(['raw']);
+
+    expect($service->queries[0])->toBe(['example.com', 'A']);
+});
+
+it('can cache empty responses when cache_empty=true', function () {
+    CacheSpy::reset();
+
+    $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests', 'cache_empty' => true]]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    return (object) ['answer' => []];
+                }
+            };
+        }
+    };
+
+    expect($service->getRecords('example.com', 'A'))->toBe([]);
+    expect(array_values(CacheSpy::$store))->toBe([[]]);
+});
+
+it('reports DNS failures except NXDOMAIN by default (or when log_nxdomain=true)', function () {
+    $service = new class([]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    throw new RuntimeException('bad things happened');
+                }
+            };
+        }
+    };
+
+    expect($service->getRecords('example.com', 'A'))->toBe([]);
+    expect(ReportSpy::$calls)->toHaveCount(1);
+
+    ReportSpy::reset();
+
+    $service = new class(['log_nxdomain' => true]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    throw new RuntimeException('NXDOMAIN');
+                }
+            };
+        }
+    };
+
+    expect($service->getRecords('does-not-exist.example', 'A'))->toBe([]);
+    expect(ReportSpy::$calls)->toHaveCount(1);
+});
+
+it('does not query resolver when domain validator config is invalid', function () {
+    $service = new class(['domain_validator' => 'BadFormat']) extends DnsLookupService
+    {
+        public int $resolverCalls = 0;
+
+        protected function createResolver(array $nameservers)
+        {
+            $this->resolverCalls++;
+
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    return (object) ['answer' => []];
+                }
+            };
+        }
+    };
+
+    expect($service->getRecords('example.com', 'A'))->toBe([]);
+    expect($service->resolverCalls)->toBe(0);
+});
+
+it('maps unknown errors to DnsQueryFailedException when throw_exceptions=true', function () {
+    $service = new class(['throw_exceptions' => true]) extends DnsLookupService
+    {
+        protected function createResolver(array $nameservers)
+        {
+            return new class
+            {
+                public function query(string $domain, string $type): object
+                {
+                    throw new RuntimeException('some other error');
+                }
+            };
+        }
+    };
+
+    $service->getRecords('example.com', 'A');
+})->throws(\Alyakin\DnsChecker\Exceptions\DnsQueryFailedException::class);

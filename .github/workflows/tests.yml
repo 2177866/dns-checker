@@ -1,13 +1,14 @@
-name: CI
+name: Tests
 
 on:
   pull_request:
   push:
+    branches: [main]
     tags:
       - "v*"
 
 jobs:
-  checks:
+  tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -32,34 +33,6 @@ jobs:
           composer require --no-interaction --no-update pear/net_dns2:"${{ matrix.netdns2 }}"
           composer update -W --no-interaction --no-progress --prefer-dist
 
-      - name: Pint (check)
-        run: composer pint -- --test
-
-      - name: PHPStan (level 5)
-        run: composer phpstan
-
       - name: Pest
         run: composer test
 
-  coverage:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup PHP (Xdebug)
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.3"
-          coverage: xdebug
-          tools: composer:v2
-
-      - name: Install dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
-
-      - name: Pest (coverage)
-        env:
-          XDEBUG_MODE: coverage
-        run: ./vendor/bin/pest --coverage --coverage-text

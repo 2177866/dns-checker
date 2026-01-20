@@ -1,7 +1,11 @@
 # Laravel DNS Checker
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/alyakin/dns-checker.svg)](https://packagist.org/packages/alyakin/dns-checker)
+[![Total Downloads](https://img.shields.io/packagist/dt/alyakin/dns-checker.svg)](https://packagist.org/packages/alyakin/dns-checker)
 [![PHP Version](https://img.shields.io/packagist/php-v/alyakin/dns-checker)](https://packagist.org/packages/alyakin/dns-checker)
+[![Pint](https://github.com/2177866/dns-checker/actions/workflows/pint.yml/badge.svg?branch=main)](https://github.com/2177866/dns-checker/actions/workflows/pint.yml)
+[![Tests](https://github.com/2177866/dns-checker/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/2177866/dns-checker/actions/workflows/tests.yml)
+[![Coverage](https://github.com/2177866/dns-checker/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/2177866/dns-checker/actions/workflows/coverage.yml)
 [![License](https://img.shields.io/packagist/l/alyakin/dns-checker.svg)](LICENSE)
 
 A Laravel-friendly DNS lookup wrapper over [`pear/net_dns2`](https://github.com/mikepultz/netdns2) with:
@@ -203,4 +207,3 @@ git config core.hooksPath .githooks
 ## License
 
 MIT
-
