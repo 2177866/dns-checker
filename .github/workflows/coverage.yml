@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PHP (Xdebug)
         uses: shivammathur/setup-php@v2
@@ -25,8 +25,11 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Pest (coverage, min 80%)
+      - name: PHPUnit coverage
         env:
           XDEBUG_MODE: coverage
-        run: ./vendor/bin/pest --coverage --min=80 --coverage-text
+        run: php ./vendor/bin/phpunit --coverage-text --coverage-clover coverage.xml
 
+      - name: Enforce coverage threshold (min 80%)
+        run: |
+          php -r '$xml = simplexml_load_file("coverage.xml"); $metrics = $xml->project->metrics; $covered = (int) $metrics["coveredelements"]; $total = (int) $metrics["elements"]; $percent = $total > 0 ? ($covered / $total) * 100 : 0; printf("Coverage: %.2f%%\n", $percent); exit($percent >= 80 ? 0 : 1);'
