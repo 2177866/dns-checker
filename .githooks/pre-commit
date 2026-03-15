@@ -25,5 +25,5 @@ fi
 echo "Running PHPStan (level 5)..."
 php ./vendor/bin/phpstan analyse -c phpstan.neon.dist --no-progress
 
-echo "Running Pest..."
-php ./vendor/bin/pest
+echo "Running PHPUnit..."
+php ./vendor/bin/phpunit

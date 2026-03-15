@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-03-16
+
+### Fixed
+- enabled the tracked pre-commit hook by making `.githooks/pre-commit` executable
+- formatted PHPUnit test classes so they pass Pint consistently in CI and locally
+
+## [2.1.1] - 2026-03-16
+
+### Fixed
+- switched the GitHub Actions coverage job from Pest to PHPUnit
+- updated GitHub Actions checkout to a Node 24 compatible version
+- restored CI coverage threshold enforcement for the PHPUnit-based test stack
+
 ## [2.1.0] - 2026-03-16
 
 ### Changed
@@ -54,7 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - initial package release
 - base DNS lookup wrapper for Laravel-oriented usage
 
-[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/2177866/dns-checker/compare/v2.1.1...v2.1.2
+[2.1.1]: https://github.com/2177866/dns-checker/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/2177866/dns-checker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/2177866/dns-checker/compare/1.0.0...v2.0.0
 [1.0.0]: https://github.com/2177866/dns-checker/releases/tag/1.0.0

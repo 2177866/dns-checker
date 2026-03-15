@@ -9,7 +9,7 @@ use Closure;
 
 final class DnsLookupServiceValidationTest extends TestCase
 {
-    public function testItDoesNotQueryTheResolverWhenTheDomainIsInvalidByTheDefaultValidator(): void
+    public function test_it_does_not_query_the_resolver_when_the_domain_is_invalid_by_the_default_validator(): void
     {
         $service = new class([]) extends DnsLookupService
         {
@@ -33,7 +33,7 @@ final class DnsLookupServiceValidationTest extends TestCase
         $this->assertSame(0, $service->resolverCalls);
     }
 
-    public function testItDoesNotQueryTheResolverWhenTheDomainBecomesEmptyAfterNormalization(): void
+    public function test_it_does_not_query_the_resolver_when_the_domain_becomes_empty_after_normalization(): void
     {
         $service = new class([]) extends DnsLookupService
         {
@@ -57,7 +57,7 @@ final class DnsLookupServiceValidationTest extends TestCase
         $this->assertSame(0, $service->resolverCalls);
     }
 
-    public function testItDoesNotQueryTheResolverWhenTheDomainValidatorConfigIsInvalid(): void
+    public function test_it_does_not_query_the_resolver_when_the_domain_validator_config_is_invalid(): void
     {
         $service = new class(['domain_validator' => 'BadFormat']) extends DnsLookupService
         {
@@ -81,7 +81,7 @@ final class DnsLookupServiceValidationTest extends TestCase
         $this->assertSame(0, $service->resolverCalls);
     }
 
-    public function testItDoesNotQueryTheResolverWhenTheValidatorMethodIsMissingFromTheConfiguredCallback(): void
+    public function test_it_does_not_query_the_resolver_when_the_validator_method_is_missing_from_the_configured_callback(): void
     {
         $service = new class(['domain_validator' => DomainValidator::class.'@missingMethod']) extends DnsLookupService
         {
@@ -105,7 +105,7 @@ final class DnsLookupServiceValidationTest extends TestCase
         $this->assertSame(0, $service->resolverCalls);
     }
 
-    public function testItExtractsRecordValuesForCommonTypesAndNormalizesDomains(): void
+    public function test_it_extracts_record_values_for_common_types_and_normalizes_domains(): void
     {
         $service = new class([]) extends DnsLookupService
         {
@@ -119,6 +119,7 @@ final class DnsLookupServiceValidationTest extends TestCase
                     $queries[] = [$domain, $type];
                 })
                 {
+
                     public function __construct(private Closure $recordQuery) {}
 
                     public function query(string $domain, string $type): object

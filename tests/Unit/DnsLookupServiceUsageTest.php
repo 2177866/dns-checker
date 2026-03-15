@@ -10,13 +10,9 @@ use Closure;
 
 final class DnsLookupServiceUsageTest extends TestCase
 {
-    public function testItCanQueryRecordsDirectlyWithDnsLookupServiceConfiguration(): void
+    public function test_it_can_query_records_directly_with_dns_lookup_service_configuration(): void
     {
-        $service = new class([
-            'servers' => ['8.8.8.8', '1.1.1.1'],
-            'timeout' => 2,
-            'fallback_to_system' => true,
-        ]) extends DnsLookupService
+        $service = new class(['servers' => ['8.8.8.8', '1.1.1.1'], 'timeout' => 2, 'fallback_to_system' => true]) extends DnsLookupService
         {
             public array $queries = [];
 
@@ -28,6 +24,7 @@ final class DnsLookupServiceUsageTest extends TestCase
                     $queries[] = compact('nameservers', 'domain', 'type');
                 })
                 {
+
                     public function __construct(
                         private array $nameservers,
                         private Closure $recordQuery,
@@ -53,7 +50,7 @@ final class DnsLookupServiceUsageTest extends TestCase
         ], $service->queries[0]);
     }
 
-    public function testItCanPreferCustomResolversAndStopAfterTheFirstSuccessfulResponse(): void
+    public function test_it_can_prefer_custom_resolvers_and_stop_after_the_first_successful_response(): void
     {
         $service = new class(['servers' => ['203.0.113.53', '203.0.113.54']]) extends DnsLookupService
         {
@@ -84,11 +81,9 @@ final class DnsLookupServiceUsageTest extends TestCase
         $this->assertSame([['203.0.113.53', '203.0.113.54']], $service->resolverNameserversCalls);
     }
 
-    public function testItCanUseACustomDomainValidatorCallbackFromConfiguration(): void
+    public function test_it_can_use_a_custom_domain_validator_callback_from_configuration(): void
     {
-        $service = new class([
-            'domain_validator' => ExampleDomainValidator::class.'@allowsExampleDomains',
-        ]) extends DnsLookupService
+        $service = new class(['domain_validator' => ExampleDomainValidator::class.'@allowsExampleDomains']) extends DnsLookupService
         {
             public int $resolverCalls = 0;
 
@@ -114,7 +109,7 @@ final class DnsLookupServiceUsageTest extends TestCase
         $this->assertSame(1, $service->resolverCalls);
     }
 
-    public function testItCanDisableDomainValidationWhenInputIsAlreadyPreparedByTheApplication(): void
+    public function test_it_can_disable_domain_validation_when_input_is_already_prepared_by_the_application(): void
     {
         $service = new class(['domain_validator' => null]) extends DnsLookupService
         {
@@ -140,16 +135,9 @@ final class DnsLookupServiceUsageTest extends TestCase
         $this->assertSame(1, $service->resolverCalls);
     }
 
-    public function testItCanCacheDnsResultsInANamedLaravelStore(): void
+    public function test_it_can_cache_dns_results_in_a_named_laravel_store(): void
     {
-        $service = new class([
-            'cache' => [
-                'enabled' => true,
-                'store' => 'redis',
-                'ttl' => 60,
-                'prefix' => 'dns-checker-tests',
-            ],
-        ]) extends DnsLookupService
+        $service = new class(['cache' => ['enabled' => true, 'store' => 'redis', 'ttl' => 60, 'prefix' => 'dns-checker-tests']]) extends DnsLookupService
         {
             protected function createResolver(array $nameservers)
             {

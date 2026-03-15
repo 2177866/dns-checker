@@ -12,12 +12,12 @@ use Closure;
 
 final class DnsCheckerClientAndFactoryTest extends TestCase
 {
-    public function testDnsLookupServiceImplementsTheDnsLookupContract(): void
+    public function test_dns_lookup_service_implements_the_dns_lookup_contract(): void
     {
         $this->assertInstanceOf(DnsLookup::class, new DnsLookupService([]));
     }
 
-    public function testItSupportsFluentConfigOverridesViaTheFactoryClient(): void
+    public function test_it_supports_fluent_config_overrides_via_the_factory_client(): void
     {
         $received = [];
 
@@ -52,7 +52,7 @@ final class DnsCheckerClientAndFactoryTest extends TestCase
         ], $received[0]);
     }
 
-    public function testItSupportsGetConfigSetConfigAndResetConfigOnTheFluentClient(): void
+    public function test_it_supports_get_config_set_config_and_reset_config_on_the_fluent_client(): void
     {
         $received = [];
 
@@ -89,7 +89,7 @@ final class DnsCheckerClientAndFactoryTest extends TestCase
         $this->assertEquals(['timeout' => 2, 'retry_count' => 1], $received[1]);
     }
 
-    public function testItSupportsFluentConfigMutationAndShortcutQueryMethodsOnDnsCheckerClient(): void
+    public function test_it_supports_fluent_config_mutation_and_shortcut_query_methods_on_dns_checker_client(): void
     {
         $receivedConfigs = [];
         $receivedQueries = [];
@@ -103,6 +103,7 @@ final class DnsCheckerClientAndFactoryTest extends TestCase
                     $receivedQueries[] = [$domain, $type];
                 }) implements DnsLookup
                 {
+
                     public function __construct(private Closure $recordQuery) {}
 
                     public function getRecords(string $domain, string $type = 'A'): array
@@ -157,7 +158,7 @@ final class DnsCheckerClientAndFactoryTest extends TestCase
         $this->assertSame(['timeout' => 2], $client->getConfig());
     }
 
-    public function testItExposesTheSameFluentApiOnDnsCheckerFactory(): void
+    public function test_it_exposes_the_same_fluent_api_on_dns_checker_factory(): void
     {
         $receivedConfigs = [];
 

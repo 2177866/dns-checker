@@ -9,7 +9,7 @@ use RuntimeException;
 
 final class DnsLookupServiceCachingTest extends TestCase
 {
-    public function testItCachesSuccessfulDnsResponsesViaLaravelCacheWhenEnabled(): void
+    public function test_it_caches_successful_dns_responses_via_laravel_cache_when_enabled(): void
     {
         $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests']]) extends DnsLookupService
         {
@@ -36,7 +36,7 @@ final class DnsLookupServiceCachingTest extends TestCase
         $this->assertSame(1, $service->resolverCalls);
     }
 
-    public function testItCanCacheEmptyResponsesWhenCacheEmptyIsEnabled(): void
+    public function test_it_can_cache_empty_responses_when_cache_empty_is_enabled(): void
     {
         $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests', 'cache_empty' => true]]) extends DnsLookupService
         {
@@ -56,7 +56,7 @@ final class DnsLookupServiceCachingTest extends TestCase
         $this->assertSame([[]], array_values(CacheSpy::$store));
     }
 
-    public function testItContinuesDnsLookupsEvenWhenTheCacheBackendIsUnavailable(): void
+    public function test_it_continues_dns_lookups_even_when_the_cache_backend_is_unavailable(): void
     {
         CacheSpy::$repositoryFactory = static fn (): object => new class
         {
@@ -66,14 +66,7 @@ final class DnsLookupServiceCachingTest extends TestCase
             }
         };
 
-        $service = new class([
-            'cache' => [
-                'enabled' => true,
-                'store' => 'redis',
-                'ttl' => 60,
-                'prefix' => 'dns-checker-tests',
-            ],
-        ]) extends DnsLookupService
+        $service = new class(['cache' => ['enabled' => true, 'store' => 'redis', 'ttl' => 60, 'prefix' => 'dns-checker-tests']]) extends DnsLookupService
         {
             public int $resolverCalls = 0;
 
