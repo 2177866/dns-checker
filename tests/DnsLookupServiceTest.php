@@ -6,497 +6,726 @@ use Alyakin\DnsChecker\DnsCheckerClient;
 use Alyakin\DnsChecker\DnsCheckerFactory;
 use Alyakin\DnsChecker\DnsLookupService;
 use Alyakin\DnsChecker\DomainValidator;
+use Alyakin\DnsChecker\ExampleDomainValidator;
 use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 use Alyakin\DnsChecker\ReportSpy;
+use NetDNS2\ENUM\Error;
+use NetDNS2\Exception as NetDns2Exception;
 
-it('does not query system resolver when custom servers are set and fallback_to_system=false', function () {
-    $service = new class(['servers' => ['203.0.113.53'], 'fallback_to_system' => false]) extends DnsLookupService
-    {
-        public array $resolverNameserversCalls = [];
-
-        protected function createResolver(array $nameservers)
+describe('guide-like usage examples', function () {
+    it('can query records directly with DnsLookupService configuration', function () {
+        $service = new class([
+            'servers' => ['8.8.8.8', '1.1.1.1'],
+            'timeout' => 2,
+            'fallback_to_system' => true,
+        ]) extends DnsLookupService
         {
-            $this->resolverNameserversCalls[] = $nameservers;
+            public array $queries = [];
 
-            return new class
+            protected function createResolver(array $nameservers)
             {
-                public function query(string $domain, string $type): object
+                $queries = &$this->queries;
+
+                return new class(function (array $nameservers, string $domain, string $type) use (&$queries): void {
+                    $queries[] = compact('nameservers', 'domain', 'type');
+                })
                 {
-                    return (object) ['answer' => []];
-                }
-            };
-        }
-    };
+                    public function __construct(private Closure $recordQuery) {}
 
-    $records = $service->getRecords('example.com', 'A');
+                    public function query(string $domain, string $type): object
+                    {
+                        ($this->recordQuery)(['8.8.8.8', '1.1.1.1'], $domain, $type);
 
-    expect($records)->toBe([]);
-    expect($service->resolverNameserversCalls)->toBe([['203.0.113.53']]);
-});
+                        return (object) ['answer' => [(object) ['address' => '203.0.113.10']]];
+                    }
+                };
+            }
+        };
 
-it('implements DnsLookup contract', function () {
-    $service = new DnsLookupService([]);
-    expect($service)->toBeInstanceOf(DnsLookup::class);
-});
+        expect($service->getRecords('example.com', 'A'))->toBe(['203.0.113.10']);
+        expect($service->queries[0])->toBe([
+            'nameservers' => ['8.8.8.8', '1.1.1.1'],
+            'domain' => 'example.com',
+            'type' => 'A',
+        ]);
+    });
 
-it('supports fluent config overrides via factory client', function () {
-    $received = [];
-
-    $factory = new DnsCheckerFactory(
-        ['timeout' => 2, 'retry_count' => 1],
-        function (array $config) use (&$received): DnsLookup {
-            $received[] = $config;
-
-            return new class implements DnsLookup
-            {
-                public function getRecords(string $domain, string $type = 'A'): array
-                {
-                    return [];
-                }
-            };
-        }
-    );
-
-    $factory
-        ->usingServer('8.8.8.8')
-        ->withTimeout(5)
-        ->setRetries(3)
-        ->fallbackToSystem(false)
-        ->query('example.com', 'TXT');
-
-    expect($received)->toHaveCount(1);
-    expect($received[0])->toMatchArray([
-        'servers' => ['8.8.8.8'],
-        'timeout' => 5,
-        'retry_count' => 3,
-        'fallback_to_system' => false,
-    ]);
-});
-
-it('supports getConfig, setConfig, resetConfig on fluent client', function () {
-    $received = [];
-
-    $factory = new DnsCheckerFactory(
-        ['timeout' => 2, 'retry_count' => 1],
-        function (array $config) use (&$received): DnsLookup {
-            $received[] = $config;
-
-            return new class implements DnsLookup
-            {
-                public function getRecords(string $domain, string $type = 'A'): array
-                {
-                    return [];
-                }
-            };
-        }
-    );
-
-    $client = $factory->make();
-
-    expect($client->getConfig())->toMatchArray(['timeout' => 2, 'retry_count' => 1]);
-
-    $client->setConfig(['servers' => ['8.8.8.8'], 'timeout' => 5]);
-    expect($client->getConfig())->toBe(['servers' => ['8.8.8.8'], 'timeout' => 5]);
-
-    $client->query('example.com', 'A');
-    expect($received)->toHaveCount(1);
-    expect($received[0])->toBe(['servers' => ['8.8.8.8'], 'timeout' => 5]);
-
-    $client
-        ->usingServer('1.1.1.1')
-        ->withTimeout(10);
-
-    $client->resetConfig()->query('example.com', 'A');
-    expect($received)->toHaveCount(2);
-    expect($received[1])->toMatchArray(['timeout' => 2, 'retry_count' => 1]);
-});
-
-it('does not call report() on NXDOMAIN by default', function () {
-    $service = new class([]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
+    it('can prefer custom resolvers and stop after the first successful response', function () {
+        $service = new class(['servers' => ['203.0.113.53', '203.0.113.54']]) extends DnsLookupService
         {
-            return new class
+            public array $resolverNameserversCalls = [];
+
+            protected function createResolver(array $nameservers)
             {
-                public function query(string $domain, string $type): object
+                $this->resolverNameserversCalls[] = $nameservers;
+
+                return new class
                 {
-                    throw new RuntimeException('NXDOMAIN');
-                }
-            };
-        }
-    };
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) [
+                            'answer' => [
+                                (object) ['address' => '203.0.113.10'],
+                                (object) ['address' => '203.0.113.11'],
+                            ],
+                        ];
+                    }
+                };
+            }
+        };
 
-    $records = $service->getRecords('does-not-exist.example', 'A');
+        expect($service->getRecords('example.com', 'A'))->toBe(['203.0.113.10', '203.0.113.11']);
+        expect($service->resolverNameserversCalls)->toBe([['203.0.113.53', '203.0.113.54']]);
+    });
 
-    expect($records)->toBe([]);
-    expect(ReportSpy::$calls)->toBe([]);
+    it('can use a custom domain validator callback from configuration', function () {
+        $service = new class([
+            'domain_validator' => ExampleDomainValidator::class.'@allowsExampleDomains',
+        ]) extends DnsLookupService
+        {
+            public int $resolverCalls = 0;
+
+            protected function createResolver(array $nameservers)
+            {
+                $this->resolverCalls++;
+
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => [(object) ['address' => '198.51.100.10']]];
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('mail.example', 'A'))->toBe(['198.51.100.10']);
+        expect($service->getRecords('mail.invalid', 'A'))->toBe([]);
+        expect($service->resolverCalls)->toBe(1);
+    });
+
+    it('can disable domain validation when input is already prepared by the application', function () {
+        $service = new class(['domain_validator' => null]) extends DnsLookupService
+        {
+            public int $resolverCalls = 0;
+
+            protected function createResolver(array $nameservers)
+            {
+                $this->resolverCalls++;
+
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('bad domain', 'A'))->toBe([]);
+        expect($service->resolverCalls)->toBe(1);
+    });
+
+    it('can cache DNS results in a named Laravel store', function () {
+        CacheSpy::reset();
+
+        $service = new class([
+            'cache' => [
+                'enabled' => true,
+                'store' => 'redis',
+                'ttl' => 60,
+                'prefix' => 'dns-checker-tests',
+            ],
+        ]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => [(object) ['address' => '198.51.100.20']]];
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('example.com', 'A'))->toBe(['198.51.100.20']);
+        expect(CacheSpy::$selectedStore)->toBe('redis');
+    });
 });
 
-it('caches successful DNS responses via Laravel cache when enabled', function () {
-    CacheSpy::reset();
+describe('fluent client and factory usage', function () {
+    it('implements DnsLookup contract', function () {
+        $service = new DnsLookupService([]);
 
-    $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests']]) extends DnsLookupService
-    {
-        public int $resolverCalls = 0;
+        expect($service)->toBeInstanceOf(DnsLookup::class);
+    });
 
-        protected function createResolver(array $nameservers)
-        {
-            $this->resolverCalls++;
+    it('supports fluent config overrides via factory client', function () {
+        $received = [];
 
-            return new class
-            {
-                public function query(string $domain, string $type): object
+        $factory = new DnsCheckerFactory(
+            ['timeout' => 2, 'retry_count' => 1],
+            function (array $config) use (&$received): DnsLookup {
+                $received[] = $config;
+
+                return new class implements DnsLookup
                 {
-                    return (object) ['answer' => [(object) ['address' => '1.2.3.4']]];
-                }
-            };
-        }
-    };
+                    public function getRecords(string $domain, string $type = 'A'): array
+                    {
+                        return [];
+                    }
+                };
+            }
+        );
 
-    expect($service->getRecords('example.com', 'A'))->toBe(['1.2.3.4']);
-    expect($service->resolverCalls)->toBe(1);
+        $factory
+            ->usingServer('8.8.8.8')
+            ->withTimeout(5)
+            ->setRetries(3)
+            ->fallbackToSystem(false)
+            ->query('example.com', 'TXT');
 
-    expect($service->getRecords('example.com', 'A'))->toBe(['1.2.3.4']);
-    expect($service->resolverCalls)->toBe(1);
+        expect($received)->toHaveCount(1);
+        expect($received[0])->toMatchArray([
+            'servers' => ['8.8.8.8'],
+            'timeout' => 5,
+            'retry_count' => 3,
+            'fallback_to_system' => false,
+        ]);
+    });
+
+    it('supports getConfig, setConfig, resetConfig on fluent client', function () {
+        $received = [];
+
+        $factory = new DnsCheckerFactory(
+            ['timeout' => 2, 'retry_count' => 1],
+            function (array $config) use (&$received): DnsLookup {
+                $received[] = $config;
+
+                return new class implements DnsLookup
+                {
+                    public function getRecords(string $domain, string $type = 'A'): array
+                    {
+                        return [];
+                    }
+                };
+            }
+        );
+
+        $client = $factory->make();
+
+        expect($client->getConfig())->toMatchArray(['timeout' => 2, 'retry_count' => 1]);
+
+        $client->setConfig(['servers' => ['8.8.8.8'], 'timeout' => 5]);
+        expect($client->getConfig())->toBe(['servers' => ['8.8.8.8'], 'timeout' => 5]);
+
+        $client->query('example.com', 'A');
+        expect($received)->toHaveCount(1);
+        expect($received[0])->toBe(['servers' => ['8.8.8.8'], 'timeout' => 5]);
+
+        $client
+            ->usingServer('1.1.1.1')
+            ->withTimeout(10);
+
+        $client->resetConfig()->query('example.com', 'A');
+        expect($received)->toHaveCount(2);
+        expect($received[1])->toMatchArray(['timeout' => 2, 'retry_count' => 1]);
+    });
+
+    it('supports fluent config mutation and shortcut query methods on DnsCheckerClient', function () {
+        $receivedConfigs = [];
+        $receivedQueries = [];
+
+        $client = new DnsCheckerClient(
+            ['timeout' => 2],
+            function (array $config) use (&$receivedConfigs, &$receivedQueries): DnsLookup {
+                $receivedConfigs[] = $config;
+
+                return new class(function (string $domain, string $type) use (&$receivedQueries): void {
+                    $receivedQueries[] = [$domain, $type];
+                }) implements DnsLookup
+                {
+                    public function __construct(private Closure $recordQuery) {}
+
+                    public function getRecords(string $domain, string $type = 'A'): array
+                    {
+                        ($this->recordQuery)($domain, $type);
+
+                        return ["$type:$domain"];
+                    }
+                };
+            },
+            ['timeout' => 2],
+        );
+
+        expect($client->getConfig())->toBe(['timeout' => 2]);
+
+        $client
+            ->usingServers(['8.8.8.8', '1.1.1.1'])
+            ->addServer('9.9.9.9')
+            ->withTimeout(5)
+            ->withRetries(3)
+            ->fallbackToSystem(false)
+            ->logNxdomain()
+            ->throwExceptions()
+            ->validateDomain(DomainValidator::class.'@validate');
+
+        expect($client->getConfig())->toMatchArray([
+            'servers' => ['8.8.8.8', '1.1.1.1', '9.9.9.9'],
+            'timeout' => 5,
+            'retry_count' => 3,
+            'fallback_to_system' => false,
+            'log_nxdomain' => true,
+            'throw_exceptions' => true,
+            'domain_validator' => DomainValidator::class.'@validate',
+        ]);
+
+        expect($client->clearServers()->getConfig()['servers'])->toBe([]);
+        $client->withoutDomainValidation();
+
+        expect($client->getRecords('example.com', 'A'))->toBe(['A:example.com']);
+        expect($client->a('example.com'))->toBe(['A:example.com']);
+        expect($client->aaaa('example.com'))->toBe(['AAAA:example.com']);
+        expect($client->mx('example.com'))->toBe(['MX:example.com']);
+        expect($client->ns('example.com'))->toBe(['NS:example.com']);
+        expect($client->txt('example.com'))->toBe(['TXT:example.com']);
+        expect($client->cname('example.com'))->toBe(['CNAME:example.com']);
+
+        expect($receivedConfigs)->toHaveCount(7);
+        expect($receivedQueries)->toHaveCount(7);
+
+        $client->setConfig(['servers' => ['8.8.4.4']]);
+        expect($client->getConfig())->toBe(['servers' => ['8.8.4.4']]);
+
+        $client->resetConfig();
+        expect($client->getConfig())->toBe(['timeout' => 2]);
+    });
+
+    it('exposes the same fluent API on DnsCheckerFactory', function () {
+        $receivedConfigs = [];
+
+        $factory = new DnsCheckerFactory(
+            ['timeout' => 2],
+            function (array $config) use (&$receivedConfigs): DnsLookup {
+                $receivedConfigs[] = $config;
+
+                return new class implements DnsLookup
+                {
+                    public function getRecords(string $domain, string $type = 'A'): array
+                    {
+                        return ["$type:$domain"];
+                    }
+                };
+            }
+        );
+
+        expect($factory->make())->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->usingServer('8.8.8.8'))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->usingServers(['1.1.1.1']))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->withTimeout(5))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->withRetries(3))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->setRetries(4))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->fallbackToSystem(false))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->logNxdomain())->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->throwExceptions())->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->validateDomain(DomainValidator::class.'@validate'))->toBeInstanceOf(DnsCheckerClient::class);
+        expect($factory->withoutDomainValidation())->toBeInstanceOf(DnsCheckerClient::class);
+
+        expect($factory->query('example.com', 'TXT'))->toBe(['TXT:example.com']);
+        expect($factory->getRecords('example.com', 'A'))->toBe(['A:example.com']);
+        expect($receivedConfigs)->toHaveCount(2);
+    });
 });
 
-it('does not query resolver when domain is invalid (default validator)', function () {
-    $service = new class([]) extends DnsLookupService
-    {
-        public int $resolverCalls = 0;
+describe('caching and resilience', function () {
+    it('caches successful DNS responses via Laravel cache when enabled', function () {
+        CacheSpy::reset();
 
-        protected function createResolver(array $nameservers)
+        $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests']]) extends DnsLookupService
         {
-            $this->resolverCalls++;
+            public int $resolverCalls = 0;
 
-            return new class
+            protected function createResolver(array $nameservers)
             {
-                public function query(string $domain, string $type): object
+                $this->resolverCalls++;
+
+                return new class
                 {
-                    return (object) ['answer' => []];
-                }
-            };
-        }
-    };
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => [(object) ['address' => '1.2.3.4']]];
+                    }
+                };
+            }
+        };
 
-    $records = $service->getRecords('bad domain', 'A');
+        expect($service->getRecords('example.com', 'A'))->toBe(['1.2.3.4']);
+        expect($service->resolverCalls)->toBe(1);
 
-    expect($records)->toBe([]);
-    expect($service->resolverCalls)->toBe(0);
+        expect($service->getRecords('example.com', 'A'))->toBe(['1.2.3.4']);
+        expect($service->resolverCalls)->toBe(1);
+    });
+
+    it('can cache empty responses when cache_empty=true', function () {
+        CacheSpy::reset();
+
+        $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests', 'cache_empty' => true]]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('example.com', 'A'))->toBe([]);
+        expect(array_values(CacheSpy::$store))->toBe([[]]);
+    });
+
+    it('continues DNS lookups even when the cache backend is unavailable', function () {
+        CacheSpy::reset();
+        CacheSpy::$repositoryFactory = static fn (): object => new class
+        {
+            public function store(?string $name): object
+            {
+                throw new RuntimeException('cache store is temporarily unavailable');
+            }
+        };
+
+        $service = new class([
+            'cache' => [
+                'enabled' => true,
+                'store' => 'redis',
+                'ttl' => 60,
+                'prefix' => 'dns-checker-tests',
+            ],
+        ]) extends DnsLookupService
+        {
+            public int $resolverCalls = 0;
+
+            protected function createResolver(array $nameservers)
+            {
+                $this->resolverCalls++;
+
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => [(object) ['address' => '198.51.100.21']]];
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('example.com', 'A'))->toBe(['198.51.100.21']);
+        expect($service->resolverCalls)->toBe(1);
+        expect(CacheSpy::$store)->toBe([]);
+    });
 });
 
-it('allows disabling domain validation via config', function () {
-    $service = new class(['domain_validator' => null]) extends DnsLookupService
-    {
-        public int $resolverCalls = 0;
-
-        protected function createResolver(array $nameservers)
+describe('validation and record extraction', function () {
+    it('does not query resolver when domain is invalid by the default validator', function () {
+        $service = new class([]) extends DnsLookupService
         {
-            $this->resolverCalls++;
+            public int $resolverCalls = 0;
 
-            return new class
+            protected function createResolver(array $nameservers)
             {
-                public function query(string $domain, string $type): object
+                $this->resolverCalls++;
+
+                return new class
                 {
-                    return (object) ['answer' => []];
-                }
-            };
-        }
-    };
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
 
-    $records = $service->getRecords('bad domain', 'A');
+        expect($service->getRecords('bad domain', 'A'))->toBe([]);
+        expect($service->resolverCalls)->toBe(0);
+    });
 
-    expect($records)->toBe([]);
-    expect($service->resolverCalls)->toBe(1);
-});
-
-it('throws DnsRecordNotFoundException on NXDOMAIN when throw_exceptions=true', function () {
-    $service = new class(['throw_exceptions' => true]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
+    it('does not query resolver when domain becomes empty after normalization', function () {
+        $service = new class([]) extends DnsLookupService
         {
-            return new class
+            public int $resolverCalls = 0;
+
+            protected function createResolver(array $nameservers)
             {
-                public function query(string $domain, string $type): object
+                $this->resolverCalls++;
+
+                return new class
                 {
-                    throw new RuntimeException('NXDOMAIN');
-                }
-            };
-        }
-    };
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
 
-    $service->getRecords('does-not-exist.example', 'A');
-})->throws(DnsRecordNotFoundException::class);
+        expect($service->getRecords(' . . . ', 'A'))->toBe([]);
+        expect($service->resolverCalls)->toBe(0);
+    });
 
-it('throws DnsTimeoutException on timeout when throw_exceptions=true', function () {
-    $service = new class(['throw_exceptions' => true]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
+    it('does not query resolver when domain validator config is invalid', function () {
+        $service = new class(['domain_validator' => 'BadFormat']) extends DnsLookupService
         {
-            return new class
+            public int $resolverCalls = 0;
+
+            protected function createResolver(array $nameservers)
             {
-                public function query(string $domain, string $type): object
+                $this->resolverCalls++;
+
+                return new class
                 {
-                    throw new RuntimeException('request timed out');
-                }
-            };
-        }
-    };
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
 
-    $service->getRecords('example.com', 'A');
-})->throws(DnsTimeoutException::class);
+        expect($service->getRecords('example.com', 'A'))->toBe([]);
+        expect($service->resolverCalls)->toBe(0);
+    });
 
-it('supports fluent config mutation and shortcut query methods on DnsCheckerClient', function () {
-    $receivedConfigs = [];
-    $receivedQueries = [];
-
-    $client = new DnsCheckerClient(
-        ['timeout' => 2],
-        function (array $config) use (&$receivedConfigs, &$receivedQueries): DnsLookup {
-            $receivedConfigs[] = $config;
-
-            return new class(function (string $domain, string $type) use (&$receivedQueries): void {
-                $receivedQueries[] = [$domain, $type];
-            }) implements DnsLookup
-            {
-                public function __construct(private Closure $recordQuery) {}
-
-                public function getRecords(string $domain, string $type = 'A'): array
-                {
-                    ($this->recordQuery)($domain, $type);
-
-                    return ["$type:$domain"];
-                }
-            };
-        },
-        ['timeout' => 2],
-    );
-
-    expect($client->getConfig())->toBe(['timeout' => 2]);
-
-    $client
-        ->usingServers(['8.8.8.8', '1.1.1.1'])
-        ->addServer('9.9.9.9')
-        ->withTimeout(5)
-        ->withRetries(3)
-        ->fallbackToSystem(false)
-        ->logNxdomain()
-        ->throwExceptions()
-        ->validateDomain(DomainValidator::class.'@validate');
-
-    expect($client->getConfig())->toMatchArray([
-        'servers' => ['8.8.8.8', '1.1.1.1', '9.9.9.9'],
-        'timeout' => 5,
-        'retry_count' => 3,
-        'fallback_to_system' => false,
-        'log_nxdomain' => true,
-        'throw_exceptions' => true,
-        'domain_validator' => DomainValidator::class.'@validate',
-    ]);
-
-    expect($client->clearServers()->getConfig()['servers'])->toBe([]);
-    $client->withoutDomainValidation();
-
-    expect($client->getRecords('example.com', 'A'))->toBe(['A:example.com']);
-    expect($client->a('example.com'))->toBe(['A:example.com']);
-    expect($client->aaaa('example.com'))->toBe(['AAAA:example.com']);
-    expect($client->mx('example.com'))->toBe(['MX:example.com']);
-    expect($client->ns('example.com'))->toBe(['NS:example.com']);
-    expect($client->txt('example.com'))->toBe(['TXT:example.com']);
-    expect($client->cname('example.com'))->toBe(['CNAME:example.com']);
-
-    expect($receivedConfigs)->toHaveCount(7);
-    expect($receivedQueries)->toHaveCount(7);
-
-    $client->setConfig(['servers' => ['8.8.4.4']]);
-    expect($client->getConfig())->toBe(['servers' => ['8.8.4.4']]);
-
-    $client->resetConfig();
-    expect($client->getConfig())->toBe(['timeout' => 2]);
-});
-
-it('exposes the same fluent API on DnsCheckerFactory', function () {
-    $receivedConfigs = [];
-
-    $factory = new DnsCheckerFactory(
-        ['timeout' => 2],
-        function (array $config) use (&$receivedConfigs): DnsLookup {
-            $receivedConfigs[] = $config;
-
-            return new class implements DnsLookup
-            {
-                public function getRecords(string $domain, string $type = 'A'): array
-                {
-                    return ["$type:$domain"];
-                }
-            };
-        }
-    );
-
-    expect($factory->make())->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->usingServer('8.8.8.8'))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->usingServers(['1.1.1.1']))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->withTimeout(5))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->withRetries(3))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->setRetries(4))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->fallbackToSystem(false))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->logNxdomain())->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->throwExceptions())->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->validateDomain(DomainValidator::class.'@validate'))->toBeInstanceOf(DnsCheckerClient::class);
-    expect($factory->withoutDomainValidation())->toBeInstanceOf(DnsCheckerClient::class);
-
-    expect($factory->query('example.com', 'TXT'))->toBe(['TXT:example.com']);
-    expect($factory->getRecords('example.com', 'A'))->toBe(['A:example.com']);
-    expect($receivedConfigs)->toHaveCount(2);
-});
-
-it('extracts record values for common types and normalizes domains', function () {
-    $service = new class([]) extends DnsLookupService
-    {
-        public array $queries = [];
-
-        protected function createResolver(array $nameservers)
+    it('does not query resolver when validator method is missing from the configured callback', function () {
+        $service = new class(['domain_validator' => DomainValidator::class.'@missingMethod']) extends DnsLookupService
         {
-            $queries = &$this->queries;
+            public int $resolverCalls = 0;
 
-            return new class(function (string $domain, string $type) use (&$queries): void {
-                $queries[] = [$domain, $type];
-            })
+            protected function createResolver(array $nameservers)
             {
+                $this->resolverCalls++;
 
-                public function __construct(private Closure $recordQuery) {}
-
-                public function query(string $domain, string $type): object
+                return new class
                 {
-                    ($this->recordQuery)($domain, $type);
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
 
-                    return (object) [
-                        'answer' => match ($type) {
-                            'A' => [(object) ['address' => '1.2.3.4']],
-                            'MX' => [(object) ['exchange' => 'mx.example.com']],
-                            'NS' => [(object) ['target' => 'ns1.example.com']],
-                            'TXT' => [(object) ['text' => 'hello']],
-                            default => [new class
-                            {
-                                public function __toString(): string
+        expect($service->getRecords('example.com', 'A'))->toBe([]);
+        expect($service->resolverCalls)->toBe(0);
+    });
+
+    it('extracts record values for common types and normalizes domains', function () {
+        $service = new class([]) extends DnsLookupService
+        {
+            public array $queries = [];
+
+            protected function createResolver(array $nameservers)
+            {
+                $queries = &$this->queries;
+
+                return new class(function (string $domain, string $type) use (&$queries): void {
+                    $queries[] = [$domain, $type];
+                })
+                {
+                    public function __construct(private Closure $recordQuery) {}
+
+                    public function query(string $domain, string $type): object
+                    {
+                        ($this->recordQuery)($domain, $type);
+
+                        return (object) [
+                            'answer' => match ($type) {
+                                'A' => [(object) ['address' => '1.2.3.4']],
+                                'MX' => [(object) ['exchange' => 'mx.example.com']],
+                                'NS' => [(object) ['target' => 'ns1.example.com']],
+                                'TXT' => [(object) ['text' => 'hello']],
+                                default => [new class
                                 {
-                                    return 'raw';
-                                }
-                            }],
-                        },
-                    ];
-                }
-            };
-        }
-    };
+                                    public function __toString(): string
+                                    {
+                                        return 'raw';
+                                    }
+                                }],
+                            },
+                        ];
+                    }
+                };
+            }
+        };
 
-    expect($service->getRecords(' example.com. ', 'A'))->toBe(['1.2.3.4']);
-    expect($service->getRecords('example.com', 'MX'))->toBe(['mx.example.com']);
-    expect($service->getRecords('example.com', 'NS'))->toBe(['ns1.example.com']);
-    expect($service->getRecords('example.com', 'TXT'))->toBe(['hello']);
-    expect($service->getRecords('example.com', 'CAA'))->toBe(['raw']);
+        expect($service->getRecords(' example.com. ', 'A'))->toBe(['1.2.3.4']);
+        expect($service->getRecords('example.com', 'MX'))->toBe(['mx.example.com']);
+        expect($service->getRecords('example.com', 'NS'))->toBe(['ns1.example.com']);
+        expect($service->getRecords('example.com', 'TXT'))->toBe(['hello']);
+        expect($service->getRecords('example.com', 'CAA'))->toBe(['raw']);
 
-    expect($service->queries[0])->toBe(['example.com', 'A']);
+        expect($service->queries[0])->toBe(['example.com', 'A']);
+    });
 });
 
-it('can cache empty responses when cache_empty=true', function () {
-    CacheSpy::reset();
-
-    $service = new class(['cache' => ['enabled' => true, 'ttl' => 60, 'prefix' => 'dns-checker-tests', 'cache_empty' => true]]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
+describe('error handling', function () {
+    it('does not query the system resolver when custom servers are set and fallback_to_system=false', function () {
+        $service = new class(['servers' => ['203.0.113.53'], 'fallback_to_system' => false]) extends DnsLookupService
         {
-            return new class
-            {
-                public function query(string $domain, string $type): object
-                {
-                    return (object) ['answer' => []];
-                }
-            };
-        }
-    };
+            public array $resolverNameserversCalls = [];
 
-    expect($service->getRecords('example.com', 'A'))->toBe([]);
-    expect(array_values(CacheSpy::$store))->toBe([[]]);
+            protected function createResolver(array $nameservers)
+            {
+                $this->resolverNameserversCalls[] = $nameservers;
+
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        return (object) ['answer' => []];
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('example.com', 'A'))->toBe([]);
+        expect($service->resolverNameserversCalls)->toBe([['203.0.113.53']]);
+    });
+
+    it('does not call report() on NXDOMAIN by default', function () {
+        $service = new class([]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new RuntimeException('NXDOMAIN');
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('does-not-exist.example', 'A'))->toBe([]);
+        expect(ReportSpy::$calls)->toBe([]);
+    });
+
+    it('recognizes NXDOMAIN from the real NetDNS2 exception type', function () {
+        $service = new class([]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new NetDns2Exception('no such domain', Error::DNS_NXDOMAIN);
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('does-not-exist.example', 'A'))->toBe([]);
+        expect(ReportSpy::$calls)->toBe([]);
+    });
+
+    it('throws DnsRecordNotFoundException on NXDOMAIN when throw_exceptions=true', function () {
+        $service = new class(['throw_exceptions' => true]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new RuntimeException('NXDOMAIN');
+                    }
+                };
+            }
+        };
+
+        $service->getRecords('does-not-exist.example', 'A');
+    })->throws(DnsRecordNotFoundException::class);
+
+    it('throws DnsTimeoutException on timeout when throw_exceptions=true', function () {
+        $service = new class(['throw_exceptions' => true]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new RuntimeException('request timed out');
+                    }
+                };
+            }
+        };
+
+        $service->getRecords('example.com', 'A');
+    })->throws(DnsTimeoutException::class);
+
+    it('reports DNS failures except NXDOMAIN by default and can report NXDOMAIN when enabled', function () {
+        $service = new class([]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new RuntimeException('bad things happened');
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('example.com', 'A'))->toBe([]);
+        expect(ReportSpy::$calls)->toHaveCount(1);
+
+        ReportSpy::reset();
+
+        $service = new class(['log_nxdomain' => true]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new RuntimeException('NXDOMAIN');
+                    }
+                };
+            }
+        };
+
+        expect($service->getRecords('does-not-exist.example', 'A'))->toBe([]);
+        expect(ReportSpy::$calls)->toHaveCount(1);
+    });
+
+    it('maps unknown resolver errors to DnsQueryFailedException when throw_exceptions=true', function () {
+        $service = new class(['throw_exceptions' => true]) extends DnsLookupService
+        {
+            protected function createResolver(array $nameservers)
+            {
+                return new class
+                {
+                    public function query(string $domain, string $type): object
+                    {
+                        throw new RuntimeException('some other error');
+                    }
+                };
+            }
+        };
+
+        $service->getRecords('example.com', 'A');
+    })->throws(DnsQueryFailedException::class);
 });
-
-it('reports DNS failures except NXDOMAIN by default (or when log_nxdomain=true)', function () {
-    $service = new class([]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
-        {
-            return new class
-            {
-                public function query(string $domain, string $type): object
-                {
-                    throw new RuntimeException('bad things happened');
-                }
-            };
-        }
-    };
-
-    expect($service->getRecords('example.com', 'A'))->toBe([]);
-    expect(ReportSpy::$calls)->toHaveCount(1);
-
-    ReportSpy::reset();
-
-    $service = new class(['log_nxdomain' => true]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
-        {
-            return new class
-            {
-                public function query(string $domain, string $type): object
-                {
-                    throw new RuntimeException('NXDOMAIN');
-                }
-            };
-        }
-    };
-
-    expect($service->getRecords('does-not-exist.example', 'A'))->toBe([]);
-    expect(ReportSpy::$calls)->toHaveCount(1);
-});
-
-it('does not query resolver when domain validator config is invalid', function () {
-    $service = new class(['domain_validator' => 'BadFormat']) extends DnsLookupService
-    {
-        public int $resolverCalls = 0;
-
-        protected function createResolver(array $nameservers)
-        {
-            $this->resolverCalls++;
-
-            return new class
-            {
-                public function query(string $domain, string $type): object
-                {
-                    return (object) ['answer' => []];
-                }
-            };
-        }
-    };
-
-    expect($service->getRecords('example.com', 'A'))->toBe([]);
-    expect($service->resolverCalls)->toBe(0);
-});
-
-it('maps unknown errors to DnsQueryFailedException when throw_exceptions=true', function () {
-    $service = new class(['throw_exceptions' => true]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
-        {
-            return new class
-            {
-                public function query(string $domain, string $type): object
-                {
-                    throw new RuntimeException('some other error');
-                }
-            };
-        }
-    };
-
-    $service->getRecords('example.com', 'A');
-})->throws(DnsQueryFailedException::class);

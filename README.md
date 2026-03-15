@@ -8,226 +8,74 @@
 [![Coverage](https://github.com/2177866/dns-checker/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/2177866/dns-checker/actions/workflows/coverage.yml)
 [![License](https://img.shields.io/packagist/l/alyakin/dns-checker.svg)](LICENSE)
 
-A Laravel-friendly DNS lookup wrapper over [NetDNS2 v2](https://github.com/mikepultz/netdns2) with:
-- Custom DNS servers + optional fallback to the system resolver
-- Optional typed exceptions (`throw_exceptions`)
-- Optional NXDOMAIN logging control
-- Optional Laravel Cache-backed caching (Redis/Memcached/Database/etc), avoiding netdns2 file/shmop cache pitfalls
-- Facade, fluent API and DI support
+A Laravel-friendly DNS lookup wrapper built on [NetDNS2 v2](https://github.com/mikepultz/netdns2) for custom resolvers, system fallback, typed exceptions, caching, and Laravel integration.
 
-## Compatibility
-
-- Runtime: PHP `8.1`–`8.3`
-- CI-tested: PHP `8.1`, `8.3`
-- NetDNS2: `^2.0`
-
-## Architecture
-
-```mermaid
-flowchart LR
-    A[Consumer code] --> B[DnsChecker facade / DI / factory]
-    B --> C[DnsCheckerClient]
-    C --> D[DnsLookupService]
-    D --> E{Cache enabled?}
-    E -->|hit| F[Return cached records]
-    E -->|miss| G[NetDNS2 Resolver]
-    G --> H{Custom servers configured?}
-    H -->|yes| I[Query custom nameservers]
-    H -->|no| J[Query system resolver]
-    I --> K{Empty result and fallback enabled?}
-    K -->|yes| J
-    K -->|no| L[Return records / empty array]
-    J --> L
-```
-
-## Installation
+## Quick Start
 
 ```bash
 composer require alyakin/dns-checker
 ```
 
-## Publish config (Laravel)
+### Laravel
 
 ```bash
 php artisan vendor:publish --tag=dns-checker-config
 ```
 
-## Usage
-
-### Plain usage
-
 ```php
-use Alyakin\DnsChecker\DnsLookupService;
+use Alyakin\DnsChecker\Facades\DnsChecker;
 
-$dns = new DnsLookupService(config('dns-checker'));
-
-$ips = $dns->getRecords('example.com');        // A records
-$txt = $dns->getRecords('example.com', 'TXT'); // TXT records
+$records = DnsChecker::getRecords('example.com', 'A');
 ```
 
-If you are not in Laravel, pass the config array directly:
+### Plain PHP
 
 ```php
 use Alyakin\DnsChecker\DnsLookupService;
 
 $dns = new DnsLookupService([
-    'servers' => ['8.8.8.8'],
+    'servers' => ['8.8.8.8', '1.1.1.1'],
     'timeout' => 2,
+    'fallback_to_system' => true,
 ]);
+
+$records = $dns->getRecords('example.com', 'MX');
 ```
 
-### Error handling
+## Compatibility
 
-By default (`throw_exceptions=false`) errors result in an empty array:
+| Component | Supported / used |
+|---|---|
+| Package runtime | PHP `8.1`–`8.3` |
+| CI matrix | PHP `8.1`, `8.3` |
+| DNS library | `mikepultz/netdns2:^2.0` |
+| Laravel support | `illuminate/support:^9.0 \|\| ^10.0 \|\| ^11.0` |
 
-```php
-$records = $dns->getRecords('does-not-exist.example', 'A'); // []
-```
+## Features
 
-With `throw_exceptions=true`, you can use `try/catch`:
+- custom DNS servers with optional fallback to the system resolver
+- optional typed exceptions for DNS failures
+- optional NXDOMAIN logging control
+- optional Laravel Cache-backed caching
+- facade, fluent API, DI contract and artisan command support
 
-```php
-use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
-use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
-use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
+## Documentation
 
-try {
-    $records = $dns->getRecords('does-not-exist.example', 'A');
-} catch (DnsRecordNotFoundException $e) {
-    // NXDOMAIN
-} catch (DnsTimeoutException $e) {
-    // timeout
-} catch (DnsQueryFailedException $e) {
-    // other DNS errors
-}
-```
-
-### Facade (Laravel)
-
-```php
-use Alyakin\DnsChecker\Facades\DnsChecker;
-
-$ips = DnsChecker::getRecords('example.com', 'A');
-```
-
-### Fluent API (Laravel)
-
-```php
-use Alyakin\DnsChecker\Facades\DnsChecker;
-
-$result = DnsChecker::usingServer('8.8.8.8')
-    ->withTimeout(5)
-    ->setRetries(3)
-    ->query('example.com', 'TXT');
-```
-
-Notes:
-- `usingServer()` overrides `servers` for this call; it will not try other configured servers.
-- System fallback may still happen if `fallback_to_system=true`.
-
-### Dependency Injection (Laravel)
-
-```php
-use Alyakin\DnsChecker\Contracts\DnsLookup;
-
-final class SomeJob
-{
-    public function handle(DnsLookup $dns): void
-    {
-        $ips = $dns->getRecords('example.com', 'A');
-    }
-}
-```
-
-### CLI (Laravel)
-
-```bash
-php artisan dns:check example.com A
-```
-
-## Configuration
-
-File: `config/dns-checker.php`
-
-- `servers` (array<string>): DNS servers (IP/host) to query first.
-- `timeout` (int|float): resolver timeout.
-- `fallback_to_system` (bool, default `true`): when `servers` are set and the result is empty, try the system resolver; if `false`, return empty result without system lookup.
-- `log_nxdomain` (bool, default `false`): whether to call `report()` on NXDOMAIN. Other DNS errors are still reported.
-- `throw_exceptions` (bool, default `false`): if `true`, throw typed exceptions instead of returning `[]` and calling `report()`.
-- `domain_validator` (string|null): `"Class@method"` validator or `null` to disable validation. Default is `Alyakin\\DnsChecker\\DomainValidator::class.'@validate'`.
-- `cache` (array):
-  - `enabled` (bool): enable Laravel Cache-backed caching for DNS results.
-  - `store` (string|null): cache store name from `config/cache.php` (e.g. `redis`, `file`, `database`, `memcached`). `null` uses the default store.
-  - `ttl` (int): TTL in seconds.
-  - `prefix` (string): cache key prefix.
-  - `cache_empty` (bool): cache empty NOERROR/NODATA responses (exceptions are not cached).
-
-### Laravel Cache example
-
-If Redis is your default Laravel cache driver, just enable caching and keep `store=null`:
-
-```php
-// config/dns-checker.php
-return [
-    // ...
-    'cache' => [
-        'enabled' => true,
-        'store' => null,
-        'ttl' => 60,
-        'prefix' => 'dns-checker',
-        'cache_empty' => false,
-    ],
-];
-```
-
-To pin a specific store:
-
-```php
-'cache' => [
-    'enabled' => true,
-    'store' => 'redis', // or 'file' / 'database' / 'memcached'
-    'ttl' => 60,
-],
-```
-
-### Custom domain validator example
-
-```php
-// config/dns-checker.php
-return [
-    // ...
-    'domain_validator' => \App\Support\Dns\DomainValidator::class.'@validate',
-];
-```
-
-```php
-namespace App\Support\Dns;
-
-final class DomainValidator
-{
-    public static function validate(string $domain): bool
-    {
-        return str_ends_with($domain, '.example')
-            && filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
-    }
-}
-```
+- [Usage](docs/usage.md)
+- [Configuration](docs/configuration.md)
+- [Error Handling](docs/error-handling.md)
+- [Caching](docs/caching.md)
+- [Laravel Integration](docs/laravel-integration.md)
+- [Architecture](docs/architecture.md)
+- [Development](docs/development.md)
 
 ## Development
 
-```bash
-composer test
-composer pint
-composer phpstan
-```
+See [docs/development.md](docs/development.md).
 
-Local DDEV environment is configured for PHP `8.3` to match the supported/tested range and avoid PHP `8.5` deprecation noise from dev dependencies.
+## Changelog
 
-Pre-commit hook (Pint → PHPStan → Pest):
-
-```bash
-git config core.hooksPath .githooks
-```
+See [CHANGELOG.md](CHANGELOG.md) for release history and migration notes.
 
 ## License
 

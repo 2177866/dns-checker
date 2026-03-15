@@ -22,9 +22,24 @@ namespace Alyakin\DnsChecker {
         /** @var array<string, mixed> */
         public static array $store = [];
 
+        public static ?string $selectedStore = null;
+
+        /** @var null|\Closure */
+        public static $repositoryFactory = null;
+
         public static function reset(): void
         {
             self::$store = [];
+            self::$selectedStore = null;
+            self::$repositoryFactory = null;
+        }
+    }
+
+    final class ExampleDomainValidator
+    {
+        public static function allowsExampleDomains(string $domain): bool
+        {
+            return str_ends_with($domain, '.example');
         }
     }
 }
@@ -35,10 +50,16 @@ namespace {
     if (! function_exists('cache')) {
         function cache(): object
         {
+            if (CacheSpy::$repositoryFactory instanceof Closure) {
+                return (CacheSpy::$repositoryFactory)();
+            }
+
             return new class
             {
                 public function store(?string $name): object
                 {
+                    CacheSpy::$selectedStore = $name;
+
                     return $this;
                 }
 
