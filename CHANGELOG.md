@@ -7,19 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-16
+
 ### Changed
 - migrated the package dependency from `pear/net_dns2` to `mikepultz/netdns2`
 - standardised the codebase on NetDNS2 v2 and removed legacy `Net_DNS2_*` compatibility paths
 - aligned the local DDEV runtime with the supported/tested PHP range
 - simplified CI dependency installation for a fixed NetDNS2 v2 target
-
-### Deprecated
-- `retry_count` remains available for backward compatibility, but is ignored by NetDNS2 v2
+- migrated the test suite from Pest to PHPUnit
+- updated dev dependencies to a secure PHPUnit release
 
 ### Documentation
-- refreshed the README for the NetDNS2 v2 migration
-- added compatibility notes and an architecture diagram
-- added this changelog
+- reorganized the documentation into focused files under `docs/`
+- shortened the README to an entry-point style overview
+- added architecture, request flow, error handling, caching, and Laravel integration documentation
+- expanded `CHANGELOG.md` with release history
+
+### Testing
+- reorganized tests into guide-like scenarios grouped by topic
+- added resilient usage examples for validation, caching, resolver selection, and error handling
 
 ## [2.0.0] - 2026-01-19
 
@@ -48,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - initial package release
 - base DNS lookup wrapper for Laravel-oriented usage
 
-[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/2177866/dns-checker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/2177866/dns-checker/compare/1.0.0...v2.0.0
 [1.0.0]: https://github.com/2177866/dns-checker/releases/tag/1.0.0
