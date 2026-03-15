@@ -8,12 +8,37 @@
 [![Coverage](https://github.com/2177866/dns-checker/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/2177866/dns-checker/actions/workflows/coverage.yml)
 [![License](https://img.shields.io/packagist/l/alyakin/dns-checker.svg)](LICENSE)
 
-A Laravel-friendly DNS lookup wrapper over [`pear/net_dns2`](https://github.com/mikepultz/netdns2) with:
+A Laravel-friendly DNS lookup wrapper over [NetDNS2 v2](https://github.com/mikepultz/netdns2) with:
 - Custom DNS servers + optional fallback to the system resolver
 - Optional typed exceptions (`throw_exceptions`)
 - Optional NXDOMAIN logging control
 - Optional Laravel Cache-backed caching (Redis/Memcached/Database/etc), avoiding netdns2 file/shmop cache pitfalls
 - Facade, fluent API and DI support
+
+## Compatibility
+
+- Runtime: PHP `8.1`–`8.3`
+- CI-tested: PHP `8.1`, `8.3`
+- NetDNS2: `^2.0`
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Consumer code] --> B[DnsChecker facade / DI / factory]
+    B --> C[DnsCheckerClient]
+    C --> D[DnsLookupService]
+    D --> E{Cache enabled?}
+    E -->|hit| F[Return cached records]
+    E -->|miss| G[NetDNS2 Resolver]
+    G --> H{Custom servers configured?}
+    H -->|yes| I[Query custom nameservers]
+    H -->|no| J[Query system resolver]
+    I --> K{Empty result and fallback enabled?}
+    K -->|yes| J
+    K -->|no| L[Return records / empty array]
+    J --> L
+```
 
 ## Installation
 
@@ -48,7 +73,6 @@ use Alyakin\DnsChecker\DnsLookupService;
 $dns = new DnsLookupService([
     'servers' => ['8.8.8.8'],
     'timeout' => 2,
-    'retry_count' => 1,
 ]);
 ```
 
@@ -127,7 +151,6 @@ File: `config/dns-checker.php`
 
 - `servers` (array<string>): DNS servers (IP/host) to query first.
 - `timeout` (int|float): resolver timeout.
-- `retry_count` (int): retry count (netdns2 v1 only; netdns2 v2 does not expose `retry_count` as an option).
 - `fallback_to_system` (bool, default `true`): when `servers` are set and the result is empty, try the system resolver; if `false`, return empty result without system lookup.
 - `log_nxdomain` (bool, default `false`): whether to call `report()` on NXDOMAIN. Other DNS errors are still reported.
 - `throw_exceptions` (bool, default `false`): if `true`, throw typed exceptions instead of returning `[]` and calling `report()`.
@@ -197,6 +220,8 @@ composer test
 composer pint
 composer phpstan
 ```
+
+Local DDEV environment is configured for PHP `8.3` to match the supported/tested range and avoid PHP `8.5` deprecation noise from dev dependencies.
 
 Pre-commit hook (Pint → PHPStan → Pest):
 
