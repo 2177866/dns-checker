@@ -1,0 +1,6 @@
+name: dns-checker
+type: php
+php_version: "8.3"
+composer_version: "2"
+omit_containers: [db, dba]
+webserver_type: generic
