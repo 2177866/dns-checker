@@ -1,5 +1,7 @@
 <?php
 
+use Alyakin\DnsChecker\DomainValidator;
+
 return [
     'servers' => [
         '8.8.8.8', // Google's Public DNS
@@ -35,8 +37,9 @@ return [
     // Domain validator. Can be:
     // - null: disable validation (domain is prepared by the app)
     // - "Class@method": static method (Laravel-friendly; works with config:cache)
-    'domain_validator' => \Alyakin\DnsChecker\DomainValidator::class.'@validate',
+    'domain_validator' => DomainValidator::class.'@validate',
 
     'timeout' => 2,
+    // Deprecated compatibility option. NetDNS2 v2 does not expose retry_count and this value is ignored.
     'retry_count' => 1,
 ];

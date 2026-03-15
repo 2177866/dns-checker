@@ -2,6 +2,7 @@
 
 namespace Alyakin\DnsChecker;
 
+use Alyakin\DnsChecker\Commands\DnsCheckCommand;
 use Alyakin\DnsChecker\Contracts\DnsLookup;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,7 +29,7 @@ class DnsCheckerServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->commands([
-                \Alyakin\DnsChecker\Commands\DnsCheckCommand::class,
+                DnsCheckCommand::class,
             ]);
         }
 

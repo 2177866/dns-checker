@@ -50,6 +50,9 @@ final class DnsCheckerFactory
         return $this->make()->withRetries($count);
     }
 
+    /**
+     * @deprecated NetDNS2 v2 does not expose retry_count; retained for backward compatibility only.
+     */
     public function setRetries(int $count): DnsCheckerClient
     {
         return $this->make()->setRetries($count);

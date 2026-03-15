@@ -2,6 +2,7 @@
 
 namespace Alyakin\DnsChecker\Facades;
 
+use Alyakin\DnsChecker\DnsCheckerFactory;
 use Illuminate\Support\Facades\Facade;
 
 /**
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static array<int, string> query(string $domain, string $type = 'A')
  * @method static array<int, string> getRecords(string $domain, string $type = 'A')
  *
- * @see \Alyakin\DnsChecker\DnsCheckerFactory
+ * @see DnsCheckerFactory
  */
 final class DnsChecker extends Facade
 {

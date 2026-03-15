@@ -84,6 +84,9 @@ final class DnsCheckerClient
         return $this->setRetries($count);
     }
 
+    /**
+     * @deprecated NetDNS2 v2 does not expose retry_count; retained for backward compatibility only.
+     */
     public function setRetries(int $count): self
     {
         $this->config['retry_count'] = $count;

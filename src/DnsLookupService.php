@@ -6,14 +6,14 @@ use Alyakin\DnsChecker\Contracts\DnsLookup;
 use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
+use NetDNS2\Exception;
+use NetDNS2\Resolver;
 
 class DnsLookupService implements DnsLookup
 {
     protected array $dnsServers;
 
     protected int $timeout;
-
-    protected int $retryCount;
 
     protected bool $fallbackToSystem;
 
@@ -32,7 +32,6 @@ class DnsLookupService implements DnsLookup
     {
         $this->dnsServers = $config['servers'] ?? [];
         $this->timeout = $config['timeout'] ?? 2;
-        $this->retryCount = $config['retry_count'] ?? 1;
         $this->fallbackToSystem = $config['fallback_to_system'] ?? true;
         $this->logNxdomain = $config['log_nxdomain'] ?? false;
         $this->throwExceptions = $config['throw_exceptions'] ?? false;
@@ -124,24 +123,10 @@ class DnsLookupService implements DnsLookup
 
     protected function createResolver(array $nameservers)
     {
-        if (class_exists(\NetDNS2\Resolver::class)) {
-            $options = [
-                'nameservers' => $nameservers,
-                'timeout' => $this->timeout,
-            ];
-
-            return new \NetDNS2\Resolver($options);
-        }
-
-        if (class_exists('Net_DNS2_Resolver')) {
-            return new \Net_DNS2_Resolver([
-                'nameservers' => $nameservers,
-                'timeout' => $this->timeout,
-                'retry_count' => $this->retryCount,
-            ]);
-        }
-
-        throw new \RuntimeException('netdns2 resolver class not found; install pear/net_dns2');
+        return new Resolver([
+            'nameservers' => $nameservers,
+            'timeout' => $this->timeout,
+        ]);
     }
 
     protected function reportFailure(string $message): void
@@ -159,15 +144,7 @@ class DnsLookupService implements DnsLookup
 
     protected function isNxdomainException(\Throwable $e): bool
     {
-        if (class_exists('NetDNS2\\Exception') && $e instanceof \NetDNS2\Exception) {
-            if (class_exists('NetDNS2\\ENUM\\Error')) {
-                return $e->getCode() === \NetDNS2\ENUM\Error::DNS_NXDOMAIN->value;
-            }
-
-            return $e->getCode() === 3;
-        }
-
-        if (class_exists('Net_DNS2_Exception') && $e instanceof \Net_DNS2_Exception) {
+        if ($e instanceof Exception) {
             return $e->getCode() === 3;
         }
 
@@ -221,7 +198,6 @@ class DnsLookupService implements DnsLookup
             'type' => strtoupper($type),
             'nameservers' => array_values($nameservers),
             'timeout' => $this->timeout,
-            'retry_count' => $this->retryCount,
         ];
 
         return $prefix.':'.hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES));

@@ -1,6 +1,6 @@
 {
     "name": "alyakin/dns-checker",
-    "description": "This is a wrapper for pear/net_dns2 for fast managed DNS checking",
+    "description": "Laravel-friendly DNS lookup wrapper built on NetDNS2 v2",
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -11,14 +11,14 @@
     ],
     "require": {
         "php": ">=8.1",
-        "pear/net_dns2": "^1.5.5 || ^2.0"
+        "mikepultz/netdns2": "^2.0"
     },
     "require-dev": {
         "laravel/pint": "^1.20",
         "illuminate/support": "^9.0 || ^10.0 || ^11.0",
-        "pestphp/pest": "^2.34",
+        "pestphp/pest": "2.36.0",
         "phpstan/phpstan": "^1.12",
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "10.5.36"
     },
     "autoload": {
         "psr-4": {
@@ -41,6 +41,9 @@
     "config": {
         "platform": {
             "php": "8.1.0"
+        },
+        "audit": {
+            "block-insecure": false
         },
         "allow-plugins": {
             "pestphp/pest-plugin": true

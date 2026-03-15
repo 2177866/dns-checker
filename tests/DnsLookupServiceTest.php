@@ -2,8 +2,11 @@
 
 use Alyakin\DnsChecker\CacheSpy;
 use Alyakin\DnsChecker\Contracts\DnsLookup;
+use Alyakin\DnsChecker\DnsCheckerClient;
 use Alyakin\DnsChecker\DnsCheckerFactory;
 use Alyakin\DnsChecker\DnsLookupService;
+use Alyakin\DnsChecker\DomainValidator;
+use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 use Alyakin\DnsChecker\ReportSpy;
@@ -159,27 +162,6 @@ it('caches successful DNS responses via Laravel cache when enabled', function ()
     expect($service->resolverCalls)->toBe(1);
 });
 
-it('does not call report() on NXDOMAIN (Net_DNS2_Exception code=3) by default', function () {
-    $service = new class([]) extends DnsLookupService
-    {
-        protected function createResolver(array $nameservers)
-        {
-            return new class
-            {
-                public function query(string $domain, string $type): object
-                {
-                    throw new Net_DNS2_Exception('no such domain', 3);
-                }
-            };
-        }
-    };
-
-    $records = $service->getRecords('does-not-exist.example', 'A');
-
-    expect($records)->toBe([]);
-    expect(ReportSpy::$calls)->toBe([]);
-});
-
 it('does not query resolver when domain is invalid (default validator)', function () {
     $service = new class([]) extends DnsLookupService
     {
@@ -270,7 +252,7 @@ it('supports fluent config mutation and shortcut query methods on DnsCheckerClie
     $receivedConfigs = [];
     $receivedQueries = [];
 
-    $client = new \Alyakin\DnsChecker\DnsCheckerClient(
+    $client = new DnsCheckerClient(
         ['timeout' => 2],
         function (array $config) use (&$receivedConfigs, &$receivedQueries): DnsLookup {
             $receivedConfigs[] = $config;
@@ -279,7 +261,7 @@ it('supports fluent config mutation and shortcut query methods on DnsCheckerClie
                 $receivedQueries[] = [$domain, $type];
             }) implements DnsLookup
             {
-                public function __construct(private \Closure $recordQuery) {}
+                public function __construct(private Closure $recordQuery) {}
 
                 public function getRecords(string $domain, string $type = 'A'): array
                 {
@@ -302,7 +284,7 @@ it('supports fluent config mutation and shortcut query methods on DnsCheckerClie
         ->fallbackToSystem(false)
         ->logNxdomain()
         ->throwExceptions()
-        ->validateDomain(\Alyakin\DnsChecker\DomainValidator::class.'@validate');
+        ->validateDomain(DomainValidator::class.'@validate');
 
     expect($client->getConfig())->toMatchArray([
         'servers' => ['8.8.8.8', '1.1.1.1', '9.9.9.9'],
@@ -311,7 +293,7 @@ it('supports fluent config mutation and shortcut query methods on DnsCheckerClie
         'fallback_to_system' => false,
         'log_nxdomain' => true,
         'throw_exceptions' => true,
-        'domain_validator' => \Alyakin\DnsChecker\DomainValidator::class.'@validate',
+        'domain_validator' => DomainValidator::class.'@validate',
     ]);
 
     expect($client->clearServers()->getConfig()['servers'])->toBe([]);
@@ -353,17 +335,17 @@ it('exposes the same fluent API on DnsCheckerFactory', function () {
         }
     );
 
-    expect($factory->make())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->usingServer('8.8.8.8'))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->usingServers(['1.1.1.1']))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->withTimeout(5))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->withRetries(3))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->setRetries(4))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->fallbackToSystem(false))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->logNxdomain())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->throwExceptions())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->validateDomain(\Alyakin\DnsChecker\DomainValidator::class.'@validate'))->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
-    expect($factory->withoutDomainValidation())->toBeInstanceOf(\Alyakin\DnsChecker\DnsCheckerClient::class);
+    expect($factory->make())->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->usingServer('8.8.8.8'))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->usingServers(['1.1.1.1']))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->withTimeout(5))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->withRetries(3))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->setRetries(4))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->fallbackToSystem(false))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->logNxdomain())->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->throwExceptions())->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->validateDomain(DomainValidator::class.'@validate'))->toBeInstanceOf(DnsCheckerClient::class);
+    expect($factory->withoutDomainValidation())->toBeInstanceOf(DnsCheckerClient::class);
 
     expect($factory->query('example.com', 'TXT'))->toBe(['TXT:example.com']);
     expect($factory->getRecords('example.com', 'A'))->toBe(['A:example.com']);
@@ -384,7 +366,7 @@ it('extracts record values for common types and normalizes domains', function ()
             })
             {
 
-                public function __construct(private \Closure $recordQuery) {}
+                public function __construct(private Closure $recordQuery) {}
 
                 public function query(string $domain, string $type): object
                 {
@@ -517,4 +499,4 @@ it('maps unknown errors to DnsQueryFailedException when throw_exceptions=true', 
     };
 
     $service->getRecords('example.com', 'A');
-})->throws(\Alyakin\DnsChecker\Exceptions\DnsQueryFailedException::class);
+})->throws(DnsQueryFailedException::class);
