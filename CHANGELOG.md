@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-22
+
+### Added
+- Add optional RawDnsLookup/queryRaw() across service, fluent client, factory and Laravel facade, preserving native NetDNS2 v2 responses without changing value-only lookups or their cache.
+- Bind the optional raw contract to the existing service singleton and cover fallback, errors, native record identity and legacy custom lookups.
+
 ## [2.1.2] - 2026-03-16
 
 ### Fixed
@@ -67,7 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - initial package release
 - base DNS lookup wrapper for Laravel-oriented usage
 
-[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/2177866/dns-checker/compare/v2.1.2...v2.2.0
 [2.1.2]: https://github.com/2177866/dns-checker/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/2177866/dns-checker/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/2177866/dns-checker/compare/v2.0.0...v2.1.0

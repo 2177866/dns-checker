@@ -1,5 +1,7 @@
 # Caching
 
+Caching applies only to extracted-value queries (`getRecords()` / `query()`). [Raw queries](raw-responses.md) bypass this cache completely.
+
 ## Cache Flow
 
 ```mermaid

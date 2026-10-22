@@ -3,6 +3,7 @@
 namespace Alyakin\DnsChecker;
 
 use Alyakin\DnsChecker\Contracts\DnsLookup;
+use Alyakin\DnsChecker\Contracts\RawDnsLookup;
 
 final class DnsCheckerClient
 {
@@ -127,6 +128,23 @@ final class DnsCheckerClient
         $this->config['domain_validator'] = null;
 
         return $this;
+    }
+
+    /**
+     * Return the original resolver response without caching or record conversion.
+     *
+     * @return object|null Original native NetDNS2 v2 packet response.
+     *
+     * @throws \LogicException When the custom lookup does not support raw responses.
+     */
+    public function queryRaw(string $domain, string $type = 'A'): ?object
+    {
+        $dns = ($this->dnsLookupFactory)($this->config);
+        if (! $dns instanceof RawDnsLookup) {
+            throw new \LogicException('Raw DNS queries require a lookup implementing '.RawDnsLookup::class.'.');
+        }
+
+        return $dns->queryRaw($domain, $type);
     }
 
     /**

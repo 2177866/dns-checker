@@ -18,7 +18,7 @@ flowchart TB
     J --> K
 ```
 
-By default (`throw_exceptions=false`) errors result in an empty array:
+For extracted-value queries, errors result in an empty array by default (`throw_exceptions=false`). [Raw queries](raw-responses.md) instead return `null` when no valid response is available, while valid empty responses remain objects:
 
 ```php
 $records = $dns->getRecords('does-not-exist.example', 'A'); // []

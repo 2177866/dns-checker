@@ -84,6 +84,18 @@ final class DnsCheckerFactory
     }
 
     /**
+     * Return the original resolver response without caching or record conversion.
+     *
+     * @return object|null Original native NetDNS2 v2 packet response.
+     *
+     * @throws \LogicException When the custom lookup does not support raw responses.
+     */
+    public function queryRaw(string $domain, string $type = 'A'): ?object
+    {
+        return $this->make()->queryRaw($domain, $type);
+    }
+
+    /**
      * @return array<int, string>
      */
     public function query(string $domain, string $type = 'A'): array
