@@ -46,8 +46,8 @@ $records = $dns->getRecords('example.com', 'MX');
 
 | Component | Supported / used |
 |---|---|
-| Package runtime | PHP `8.1`–`8.3` |
-| CI matrix | PHP `8.1`, `8.3` |
+| Package runtime | PHP `8.2`+ (tested on `8.2` and `8.3`) |
+| CI matrix | PHP `8.2`, `8.3` |
 | DNS library | `mikepultz/netdns2:^2.0` |
 | Laravel support | `illuminate/support:^9.0 \|\| ^10.0 \|\| ^11.0` |
 
