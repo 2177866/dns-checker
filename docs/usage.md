@@ -1,5 +1,7 @@
 # Usage
 
+For native packets including CNAME chains, TTLs and authority/additional sections, see [raw DNS responses](raw-responses.md). The request flow below describes extracted-value queries only.
+
 ## Request Flow
 
 ```mermaid

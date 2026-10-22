@@ -58,10 +58,12 @@ $records = $dns->getRecords('example.com', 'MX');
 - optional NXDOMAIN logging control
 - optional Laravel Cache-backed caching
 - facade, fluent API, DI contract and artisan command support
+- optional native DNS responses preserving record metadata and every response section
 
 ## Documentation
 
 - [Usage](docs/usage.md)
+- [Raw DNS responses](docs/raw-responses.md)
 - [Configuration](docs/configuration.md)
 - [Error Handling](docs/error-handling.md)
 - [Caching](docs/caching.md)

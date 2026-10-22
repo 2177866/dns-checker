@@ -34,6 +34,8 @@ final class CheckDnsJob
 }
 ```
 
+For native response metadata, inject the optional `Contracts\RawDnsLookup` contract. It resolves to the same concrete `DnsLookupService` singleton as `DnsLookup`; the original interface is unchanged. See [raw DNS responses](raw-responses.md).
+
 ## Factory / Fluent Client
 
 ```php

@@ -2,14 +2,14 @@
 
 namespace Alyakin\DnsChecker;
 
-use Alyakin\DnsChecker\Contracts\DnsLookup;
+use Alyakin\DnsChecker\Contracts\RawDnsLookup;
 use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 use NetDNS2\Exception;
 use NetDNS2\Resolver;
 
-class DnsLookupService implements DnsLookup
+class DnsLookupService implements RawDnsLookup
 {
     protected array $dnsServers;
 
@@ -62,6 +62,62 @@ class DnsLookupService implements DnsLookup
 
         // Пытаемся с системным резолвером
         return $this->resolve($domain, $type);
+    }
+
+    /**
+     * Return the original resolver response, bypassing the string-record cache.
+     *
+     * Custom servers fall back to the system resolver on failure or empty answer.
+     * Preserve a valid empty custom response if the system lookup fails.
+     *
+     * @return object|null Original native NetDNS2 v2 packet response.
+     */
+    public function queryRaw(string $domain, string $type = 'A'): ?object
+    {
+        $domain = $this->normalizeDomain($domain);
+        if (! $this->isValidDomain($domain)) {
+            return null;
+        }
+
+        $response = null;
+        if (! empty($this->dnsServers)) {
+            $response = $this->resolveRaw($domain, $type, $this->dnsServers);
+            if ($response !== null && ! empty($response->answer)) {
+                return $response;
+            }
+
+            if (! $this->fallbackToSystem) {
+                return $response;
+            }
+        }
+
+        return $this->resolveRaw($domain, $type) ?? $response;
+    }
+
+    /**
+     * Query with the configured error policy, preserving every response section.
+     *
+     * @param  array<int, string>  $nameservers
+     * @return object|null Original native NetDNS2 v2 packet response.
+     */
+    protected function resolveRaw(string $domain, string $type, array $nameservers = []): ?object
+    {
+        try {
+            return $this->createResolver($nameservers)->query($domain, $type);
+        } catch (\Throwable $e) {
+            $isNxdomain = $this->isNxdomainException($e);
+            if ($this->throwExceptions) {
+                throw $this->mapException($e, $domain, $type, $nameservers);
+            }
+
+            if (! $isNxdomain || $this->logNxdomain) {
+                $this->reportFailure(
+                    'DNS lookup failed ('.(empty($nameservers) ? 'system' : implode(', ', $nameservers)).'): '.$e->getMessage()
+                );
+            }
+
+            return null;
+        }
     }
 
     protected function resolve(string $domain, string $type, array $nameservers = []): array

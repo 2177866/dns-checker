@@ -4,6 +4,7 @@ namespace Alyakin\DnsChecker;
 
 use Alyakin\DnsChecker\Commands\DnsCheckCommand;
 use Alyakin\DnsChecker\Contracts\DnsLookup;
+use Alyakin\DnsChecker\Contracts\RawDnsLookup;
 use Illuminate\Support\ServiceProvider;
 
 class DnsCheckerServiceProvider extends ServiceProvider
@@ -22,6 +23,7 @@ class DnsCheckerServiceProvider extends ServiceProvider
         });
 
         $this->app->alias(DnsLookupService::class, 'dns-checker');
+        $this->app->alias(DnsLookupService::class, RawDnsLookup::class);
         $this->app->singleton(DnsLookup::class, fn ($app) => $app->make(DnsLookupService::class));
     }
 

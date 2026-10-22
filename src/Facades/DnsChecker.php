@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Alyakin\DnsChecker\DnsCheckerClient throwExceptions(bool $enabled = true)
  * @method static \Alyakin\DnsChecker\DnsCheckerClient withoutDomainValidation()
  * @method static \Alyakin\DnsChecker\DnsCheckerClient validateDomain(string $classAtMethod)
+ * @method static ?object queryRaw(string $domain, string $type = 'A')
  * @method static array<int, string> query(string $domain, string $type = 'A')
  * @method static array<int, string> getRecords(string $domain, string $type = 'A')
  *
