@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-22
+
+### Changed
+- **Breaking:** Require PHP 8.2 or later; PHP 8.1 is no longer supported. Composer dependency resolution targets PHP 8.2.0 and CI tests PHP 8.2 and 8.3.
+
 ## [2.1.2] - 2026-03-16
 
 ### Fixed
@@ -67,7 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - initial package release
 - base DNS lookup wrapper for Laravel-oriented usage
 
-[Unreleased]: https://github.com/2177866/dns-checker/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/2177866/dns-checker/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/2177866/dns-checker/compare/v2.1.2...v3.0.0
 [2.1.2]: https://github.com/2177866/dns-checker/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/2177866/dns-checker/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/2177866/dns-checker/compare/v2.0.0...v2.1.0
