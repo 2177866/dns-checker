@@ -7,10 +7,17 @@ use Alyakin\DnsChecker\Contracts\RawDnsLookup;
 use Alyakin\DnsChecker\DnsCheckerFactory;
 use Alyakin\DnsChecker\DnsCheckerServiceProvider;
 use Alyakin\DnsChecker\DnsLookupService;
+use Alyakin\DnsChecker\ExampleDomainValidator;
+use Alyakin\DnsChecker\Exceptions\DnsLookupException;
 use Alyakin\DnsChecker\Exceptions\DnsQueryFailedException;
 use Alyakin\DnsChecker\Exceptions\DnsRecordNotFoundException;
 use Alyakin\DnsChecker\Exceptions\DnsTimeoutException;
 use Alyakin\DnsChecker\Facades\DnsChecker;
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Foundation\Application;
+use NetDNS2\Packet\Response;
+use NetDNS2\RR;
+use NetDNS2\RR\CNAME;
 use PHPUnit\Framework\TestCase;
 
 /** Deterministic resolver doubles never perform network queries or access a database. */
@@ -40,9 +47,9 @@ final class RawDnsLookupTest extends TestCase
 
     public function test_preserves_native_net_dns2_record_types(): void
     {
-        $record = \NetDNS2\RR::fromString('client.example. 60 IN CNAME public.example.');
-        self::assertInstanceOf(\NetDNS2\RR\CNAME::class, $record);
-        $response = (new \ReflectionClass(\NetDNS2\Packet\Response::class))->newInstanceWithoutConstructor();
+        $record = RR::fromString('client.example. 60 IN CNAME public.example.');
+        self::assertInstanceOf(CNAME::class, $record);
+        $response = (new \ReflectionClass(Response::class))->newInstanceWithoutConstructor();
         $response->answer = [$record];
         $service = new ScriptedRawLookup([], [$response]);
         $owner = $record->name;
@@ -143,7 +150,7 @@ final class RawDnsLookupTest extends TestCase
         self::assertSame($response, $unvalidated->queryRaw('invalid domain'));
 
         $validated = new ScriptedRawLookup([
-            'domain_validator' => \Alyakin\DnsChecker\ExampleDomainValidator::class.'@allowsExampleDomains',
+            'domain_validator' => ExampleDomainValidator::class.'@allowsExampleDomains',
         ], [$response]);
         self::assertNull($validated->queryRaw('client.invalid'));
         self::assertSame($response, $validated->queryRaw('client.example'));
@@ -167,7 +174,7 @@ final class RawDnsLookupTest extends TestCase
             try {
                 $service->queryRaw('client.example', 'TXT');
                 self::fail('Expected mapped DNS exception.');
-            } catch (\Alyakin\DnsChecker\Exceptions\DnsLookupException $exception) {
+            } catch (DnsLookupException $exception) {
                 self::assertInstanceOf($exceptionClass, $exception);
                 self::assertSame($original, $exception->getPrevious());
                 self::assertSame('client.example', $exception->domain);
@@ -240,8 +247,8 @@ final class RawDnsLookupTest extends TestCase
 
     public function test_provider_registers_optional_raw_contract_as_concrete_service_alias(): void
     {
-        $app = $this->createMock(\Illuminate\Contracts\Foundation\Application::class);
-        $config = $this->createMock(\Illuminate\Contracts\Config\Repository::class);
+        $app = $this->createMock(Application::class);
+        $config = $this->createMock(Repository::class);
         $config->method('get')->with('dns-checker', [])->willReturn([]);
         $service = new DnsLookupService([]);
         $app->method('make')->willReturnCallback(static function (string $abstract) use ($config, $service): object {
